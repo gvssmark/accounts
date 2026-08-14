@@ -1,13 +1,14 @@
 /**
- * Data Entry — Journal & Accounts
- * ---------------------------------
+ * Data Entry — Journal & Accounts (Web App API)
+ * ------------------------------------------------
+ * Deploy this as a Web App (Deploy > New deployment > Web app):
+ *   Execute as:  Me
+ *   Who has access: Anyone
+ * Copy the resulting /exec URL into WEB_APP_URL at the top of
+ * JournalForm.html and AccountsForm.html (hosted on GitHub Pages).
+ *
  * Sheet 1 "Journal"  columns: date, jrnlNo, drAccount, crAccount, details, amount, finYear
  * Sheet 2 "Accounts" columns: acno, bsie, type, acname, fullacname
- *
- * Setup:
- *   Extensions > Apps Script > paste this as Code.gs
- *   Add two HTML files: JournalForm.html and AccountsForm.html
- *   Reload the spreadsheet — a "Data Entry" menu will appear.
  */
 
 const JOURNAL_SHEET = 'Journal';
@@ -16,22 +17,40 @@ const ACCOUNTS_SHEET = 'Accounts';
 // acno first digit <-> account type
 const TYPE_PREFIX = { 'ASSET': '1', 'LIABILITY': '2', 'PAYMENT': '3', 'RECEIPT': '4' };
 
-function onOpen() {
-  SpreadsheetApp.getUi()
-    .createMenu('Data Entry')
-    .addItem('New Journal Entry', 'showJournalForm')
-    .addItem('New Account', 'showAccountsForm')
-    .addToUi();
+// ---------------------------------------------------------------------
+// Web App entry points
+// ---------------------------------------------------------------------
+
+function doGet(e) {
+  try {
+    const action = e.parameter.action;
+    let data;
+    if (action === 'journalForm') data = getJournalFormData();
+    else if (action === 'accountsForm') data = getAccountsFormData();
+    else if (action === 'nextAcno') data = { acno: getNextAcno(e.parameter.type) };
+    else throw new Error('Unknown action: ' + action);
+    return jsonOutput_({ ok: true, data: data });
+  } catch (err) {
+    return jsonOutput_({ ok: false, error: err.message });
+  }
 }
 
-function showJournalForm() {
-  const html = HtmlService.createHtmlOutputFromFile('JournalForm').setWidth(480).setHeight(560);
-  SpreadsheetApp.getUi().showModalDialog(html, 'New Journal Entry');
+function doPost(e) {
+  try {
+    // Sent as text/plain from the browser to avoid CORS preflight; parse manually.
+    const body = JSON.parse(e.postData.contents);
+    let data;
+    if (body.action === 'journal') data = submitJournalEntry(body.entry);
+    else if (body.action === 'account') data = submitAccountEntry(body.entry);
+    else throw new Error('Unknown action: ' + body.action);
+    return jsonOutput_({ ok: true, data: data });
+  } catch (err) {
+    return jsonOutput_({ ok: false, error: err.message });
+  }
 }
 
-function showAccountsForm() {
-  const html = HtmlService.createHtmlOutputFromFile('AccountsForm').setWidth(480).setHeight(440);
-  SpreadsheetApp.getUi().showModalDialog(html, 'New Account');
+function jsonOutput_(obj) {
+  return ContentService.createTextOutput(JSON.stringify(obj)).setMimeType(ContentService.MimeType.JSON);
 }
 
 // ---------------------------------------------------------------------
@@ -82,7 +101,6 @@ function fmtDate_(d) {
 // Journal
 // ---------------------------------------------------------------------
 
-/** Called when the Journal form loads. */
 function getJournalFormData() {
   const values = getJournalSheet_().getDataRange().getValues();
   const col = headerMap_(values);
@@ -122,7 +140,6 @@ function getAccountsList_() {
   return list.sort();
 }
 
-/** Called on Journal form submit. `entry` = {date, finYear, drAccount, crAccount, details, amount} */
 function submitJournalEntry(entry) {
   const sheet = getJournalSheet_();
   const values = sheet.getDataRange().getValues();
@@ -139,7 +156,6 @@ function submitJournalEntry(entry) {
   const amount = Number(entry.amount);
   if (isNaN(amount) || amount <= 0) throw new Error('Amount must be a positive number');
 
-  // Recompute jrnlNo at write time (guards against two people submitting at once)
   let maxJrnlNo = 0;
   for (let i = 1; i < values.length; i++) {
     const n = Number(values[i][col['jrnlno']]);
@@ -173,7 +189,6 @@ function getAccountsFormData() {
   return { types: Object.keys(TYPE_PREFIX) };
 }
 
-/** Suggests the next free acno for a given type, e.g. ASSET -> "1009" */
 function getNextAcno(type) {
   const prefix = TYPE_PREFIX[type];
   if (!prefix) throw new Error('Unknown account type: ' + type);
@@ -191,7 +206,6 @@ function getNextAcno(type) {
   return prefix + String(max + 1).padStart(3, '0');
 }
 
-/** Called on Accounts form submit. `entry` = {acno, bsie, type, acname} */
 function submitAccountEntry(entry) {
   const sheet = getAccountsSheet_();
   const values = sheet.getDataRange().getValues();
