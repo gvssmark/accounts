@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>Indian Bank Retirees' Association</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#1a73e8">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon.svg">
+<style>
+  :root { --brand: #1a73e8; --brand-dark: #0d47a1; --bg: #f5f6f8; --border: #e0e0e0; }
+  * { box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; margin: 0; background: var(--bg); color: #222; font-size: 14px; }
+
+  /* ---- Header / Nav ---- */
+  header.topbar {
+    background: var(--brand); color: #fff; display: flex; align-items: center;
+    padding: 10px 12px; position: sticky; top: 0; z-index: 100; gap: 10px;
+  }
+  header.topbar h1 { font-size: 16px; margin: 0; font-weight: 600; line-height: 1.2; }
+  header.topbar .sub { font-size: 11px; opacity: 0.85; }
+  #hamburger {
+    background: none; border: none; color: #fff; font-size: 22px; cursor: pointer; padding: 4px 8px;
+  }
+  #sideNav {
+    position: fixed; top: 0; left: -280px; width: 260px; height: 100%; background: #fff;
+    box-shadow: 2px 0 8px rgba(0,0,0,0.2); transition: left 0.2s ease; z-index: 200; overflow-y: auto;
+  }
+  #sideNav.open { left: 0; }
+  #sideNav .navHeader { background: var(--brand-dark); color: #fff; padding: 18px 16px; }
+  #sideNav .navHeader div.name { font-weight: bold; font-size: 15px; }
+  #sideNav a {
+    display: block; padding: 14px 18px; text-decoration: none; color: #222; border-bottom: 1px solid #f0f0f0;
+  }
+  #sideNav a.active { background: #eaf1fd; color: var(--brand); font-weight: bold; }
+  #navOverlay {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.35); z-index: 150;
+  }
+  #navOverlay.open { display: block; }
+
+  main { max-width: 960px; margin: 0 auto; padding: 16px; }
+  .card { background: #fff; border: 1px solid var(--border); border-radius: 8px; padding: 16px; margin-bottom: 16px; }
+  h2 { margin: 0 0 4px; font-size: 19px; }
+  h3 { margin: 20px 0 8px; font-size: 15px; }
+  label { display: block; font-weight: bold; margin-top: 12px; font-size: 12px; color: #444; }
+  input, select, textarea {
+    width: 100%; padding: 8px; margin-top: 4px; box-sizing: border-box; font-size: 14px;
+    border: 1px solid #ccc; border-radius: 5px; font-family: inherit;
+  }
+  .row { display: flex; gap: 12px; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 140px; }
+  .hint { color: #777; font-size: 11px; margin-top: 3px; }
+  button.btn {
+    padding: 9px 16px; font-size: 14px; border: none; border-radius: 5px;
+    background: var(--brand); color: #fff; cursor: pointer; margin-top: 14px; margin-right: 8px;
+  }
+  button.btn.secondary { background: #eee; color: #333; }
+  button.btn.danger { background: #c0392b; }
+  button.btn:disabled { background: #999; cursor: default; }
+  .msg-error { color: #c0392b; margin-top: 10px; white-space: pre-wrap; font-size: 13px; }
+  .msg-ok { color: #0a7a2f; margin-top: 10px; font-size: 13px; }
+  .badge { display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; margin-left: 8px; }
+  .badge.ok { background: #e6f4ea; color: #0a7a2f; }
+  .badge.bad { background: #fce8e6; color: #c0392b; }
+
+  /* autocomplete */
+  .ac-wrap { position: relative; }
+  .ac-list {
+    position: absolute; left: 0; right: 0; top: 100%; background: #fff; border: 1px solid #ccc;
+    border-top: none; max-height: 220px; overflow-y: auto; z-index: 50; border-radius: 0 0 5px 5px; display: none;
+  }
+  .ac-list div { padding: 8px 10px; cursor: pointer; font-size: 13px; }
+  .ac-list div:hover, .ac-list div.hl { background: #eaf1fd; }
+
+  /* tables / reports */
+  table.report { width: 100%; border-collapse: collapse; }
+  table.report th, table.report td { padding: 6px 8px; font-size: 13px; border-bottom: 1px solid #f0f0f0; text-align: right; }
+  table.report th:first-child, table.report td:first-child,
+  table.report th:nth-child(2), table.report td:nth-child(2) { text-align: left; }
+  table.report thead th { background: #fafafa; font-size: 11px; text-transform: uppercase; color: #666; }
+  .subtotal td { font-weight: bold; border-top: 1px solid #bbb; }
+  .grand-total td { font-weight: bold; font-size: 14px; border-top: 2px solid #333; background: #f7f7f7; }
+  .group-label td { font-weight: bold; background: #fafafa; }
+  .table-wrap { overflow-x: auto; }
+  .account-block { margin-bottom: 22px; border: 1px solid var(--border); border-radius: 6px; overflow: hidden; }
+  .account-header {
+    background: #f5f5f5; padding: 8px 12px; font-weight: bold; display: flex; justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+  .cols { display: flex; gap: 20px; flex-wrap: wrap; }
+  .cols > .col { flex: 1; min-width: 280px; }
+
+  .report-toolbar { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 14px; }
+  .report-toolbar > div { min-width: 160px; }
+
+  /* mobile stacked tables for reports (screen only) */
+  @media (max-width: 620px) {
+    table.report.stack thead { display: none; }
+    table.report.stack, table.report.stack tbody, table.report.stack tr, table.report.stack td { display: block; width: 100%; }
+    table.report.stack tr { border-bottom: 1px solid var(--border); padding: 6px 0; }
+    table.report.stack td { text-align: right; display: flex; justify-content: space-between; padding: 3px 4px; border: none; }
+    table.report.stack td::before { content: attr(data-label); font-weight: bold; text-align: left; color: #555; }
+    .cols { flex-direction: column; }
+  }
+
+  /* print */
+  .print-header { display: none; }
+  @media print {
+    header.topbar, #sideNav, #navOverlay, .no-print { display: none !important; }
+    body { background: #fff; font-size: 12px; }
+    main { max-width: none; padding: 0; margin: 0; }
+    .card { border: none; padding: 0; box-shadow: none; }
+    @page { size: A4; margin: 22mm 14mm 16mm; }
+    .print-header {
+      display: block; position: fixed; top: -14mm; left: 0; right: 0;
+      text-align: center; border-bottom: 1px solid #333; padding-bottom: 4px; margin-bottom: 8px;
+    }
+    .print-header .org { font-weight: bold; font-size: 15px; }
+    .print-header .rep { font-size: 12px; color: #333; }
+    table.report.stack thead { display: table-header-group; }
+    table.report.stack, table.report.stack tbody, table.report.stack tr, table.report.stack td { display: revert; width: revert; }
+    table.report.stack td { text-align: right; }
+    table.report.stack td:first-child, table.report.stack td:nth-child(2) { text-align: left; }
+    table.report.stack td::before { content: none; }
+    .cols { display: flex; flex-direction: row; }
+  }
+
+  #toast {
+    position: fixed; bottom: 16px; left: 50%; transform: translateX(-50%); background: #222; color: #fff;
+    padding: 10px 18px; border-radius: 6px; font-size: 13px; z-index: 500; display: none; max-width: 90%;
+  }
+</style>
+</head>
+<body>
+
+<header class="topbar">
+  <button id="hamburger" onclick="toggleNav()">&#9776;</button>
+  <div>
+    <h1>Indian Bank Retirees' Association</h1>
+    <div class="sub">Accounts &amp; Journal</div>
+  </div>
+</header>
+
+<div id="navOverlay" onclick="closeNav()"></div>
+<nav id="sideNav">
+  <div class="navHeader">
+    <div class="name">IBRA Accounts</div>
+    <div style="font-size:12px;opacity:.85;">Menu</div>
+  </div>
+  <a href="#about" data-route="about">About / Dos &amp; Don'ts</a>
+  <a href="#journal" data-route="journal">Journal</a>
+  <a href="#account" data-route="account">Account Addition</a>
+  <a href="#bsie" data-route="bsie">BSIE Reports</a>
+  <a href="#ledger" data-route="ledger">Ledger Reports</a>
+  <a href="#close" data-route="close">Financial Year Closing</a>
+</nav>
+
+<div class="print-header" id="printHeader">
+  <div class="org">Indian Bank Retirees' Association</div>
+  <div class="rep" id="printHeaderSub"></div>
+</div>
+
+<main id="app"></main>
+<div id="toast"></div>
+
+<script>
+// ==========================================================================
+// Configure this
+// ==========================================================================
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycby5nDN-T4n6ivA7N7wL5_K-7ouB-lEaZ7TGrF30wsDZnxZAQeI-6Y5wIjyQPrIyVz_O9Q/exec';
+// ==========================================================================
+
+const state = { finYears: [], accounts: [], bsieCodes: [] };
+
+// ---------------------------------------------------------------------
+// Nav / routing
+// ---------------------------------------------------------------------
+function toggleNav() {
+  document.getElementById('sideNav').classList.toggle('open');
+  document.getElementById('navOverlay').classList.toggle('open');
+}
+function closeNav() {
+  document.getElementById('sideNav').classList.remove('open');
+  document.getElementById('navOverlay').classList.remove('open');
+}
+
+const ROUTES = {
+  about: renderAbout,
+  journal: renderJournal,
+  account: renderAccount,
+  bsie: renderBsie,
+  ledger: renderLedger,
+  close: renderClose
+};
+
+function router() {
+  closeNav();
+  const route = (location.hash || '#about').slice(1);
+  const fn = ROUTES[route] || renderAbout;
+  document.querySelectorAll('#sideNav a').forEach(a => a.classList.toggle('active', a.dataset.route === route));
+  document.getElementById('app').innerHTML = '<div class="card">Loading…</div>';
+  document.getElementById('printHeaderSub').innerText = '';
+  fn();
+}
+window.addEventListener('hashchange', router);
+
+// ---------------------------------------------------------------------
+// API helpers
+// ---------------------------------------------------------------------
+function apiGet(action, params) {
+  let url = WEB_APP_URL + '?action=' + encodeURIComponent(action);
+  if (params) Object.keys(params).forEach(k => { if (params[k] !== undefined) url += '&' + k + '=' + encodeURIComponent(params[k]); });
+  return fetch(url).then(r => r.json()).then(res => {
+    if (!res.ok) throw new Error(res.error);
+    return res.data;
+  });
+}
+function apiPost(body) {
+  return fetch(WEB_APP_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+    body: JSON.stringify(body)
+  }).then(r => r.json()).then(res => {
+    if (!res.ok) throw new Error(res.error);
+    return res.data;
+  });
+}
+function toast(msg, isError) {
+  const t = document.getElementById('toast');
+  t.innerText = msg;
+  t.style.background = isError ? '#c0392b' : '#222';
+  t.style.display = 'block';
+  clearTimeout(toast._t);
+  toast._t = setTimeout(() => t.style.display = 'none', 4000);
+}
+function fmt(n) {
+  n = Number(n) || 0;
+  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function getFinYears() {
+  return state.finYears.length ? Promise.resolve(state.finYears) : apiGet('finYears').then(d => { state.finYears = d.finYears; return d.finYears; });
+}
+
+// ---------------------------------------------------------------------
+// Autocomplete (as-you-type account filter)
+// ---------------------------------------------------------------------
+function setupAutocomplete(inputId, listId, hiddenId, items) {
+  const input = document.getElementById(inputId);
+  const list = document.getElementById(listId);
+  const hidden = document.getElementById(hiddenId);
+
+  function render(filter) {
+    const f = filter.trim().toLowerCase();
+    const matches = f ? items.filter(a => a.toLowerCase().includes(f)) : items;
+    if (!matches.length) { list.style.display = 'none'; return; }
+    list.innerHTML = matches.slice(0, 50).map(a => '<div data-v="' + escapeHtml(a) + '">' + escapeHtml(a) + '</div>').join('');
+    list.style.display = 'block';
+  }
+
+  input.addEventListener('input', () => { hidden.value = ''; input.style.borderColor = '#ccc'; render(input.value); });
+  input.addEventListener('focus', () => render(input.value));
+  input.addEventListener('blur', () => {
+    setTimeout(() => {
+      list.style.display = 'none';
+      if (items.includes(input.value)) { hidden.value = input.value; input.style.borderColor = '#ccc'; }
+      else if (input.value) { input.style.borderColor = '#c0392b'; hidden.value = ''; }
+    }, 150);
+  });
+  list.addEventListener('mousedown', e => {
+    const v = e.target.getAttribute('data-v');
+    if (v == null) return;
+    input.value = v; hidden.value = v; list.style.display = 'none'; input.style.borderColor = '#ccc';
+  });
+}
+
+// ---------------------------------------------------------------------
+// About
+// ---------------------------------------------------------------------
+function renderAbout() {
+  document.getElementById('app').innerHTML =
+    '<div class="card">' +
+    '<h2>About</h2>' +
+    '<p>This app is the Journal &amp; Accounts data entry and reporting system for the ' +
+    '<strong>Indian Bank Retirees\' Association</strong>. Entries made here write directly to the ' +
+    'Association\'s Google Sheet.</p>' +
+    '<h3>Dos</h3>' +
+    '<ul>' +
+    '<li>Double-check the Debit and Credit accounts before submitting a Journal entry — there is no in-app edit.</li>' +
+    '<li>Use the account search box (type to filter) to avoid picking the wrong account.</li>' +
+    '<li>Check the BSIE report\'s balance badge after major entries — it flags miscoded accounts.</li>' +
+    '<li>Only run Financial Year Closing once, after the year\'s entries are complete and reviewed.</li>' +
+    '</ul>' +
+    '<h3>Don\'ts</h3>' +
+    '<ul>' +
+    '<li>Don\'t worry about a duplicate Journal Number — it can happen if two people enter around the same time. ' +
+    'It doesn\'t affect totals; an administrator can correct it directly in the Sheet later.</li>' +
+    '<li>Don\'t re-run Financial Year Closing for a year that\'s already been closed — it will refuse if the next year already has entries.</li>' +
+    '<li>Don\'t delete or edit entries here — that\'s done directly in the Google Sheet by an administrator.</li>' +
+    '</ul>' +
+    '</div>';
+}
+
+// ---------------------------------------------------------------------
+// Journal
+// ---------------------------------------------------------------------
+function renderJournal() {
+  apiGet('journalForm').then(data => {
+    state.accounts = data.accounts;
+    document.getElementById('app').innerHTML =
+      '<div class="card">' +
+      '<h2>New Journal Entry</h2>' +
+      '<div class="row">' +
+        '<div><label>Financial Year</label><input id="j_finYear" readonly value="' + data.finYear + '">' +
+          '<div class="hint">' + data.finYearStart + ' to ' + data.finYearEnd + '</div></div>' +
+        '<div><label>Journal No.</label><input id="j_jrnlNo" readonly value="' + data.nextJrnlNo + '"></div>' +
+      '</div>' +
+      '<label>Date</label><input type="date" id="j_date" min="' + data.finYearStart + '" max="' + data.finYearEnd + '">' +
+      '<div class="row">' +
+        '<div class="ac-wrap"><label>Debit Account</label><input id="j_drInput" placeholder="Type to search…" autocomplete="off">' +
+          '<div class="ac-list" id="j_drList"></div><input type="hidden" id="j_drAccount"></div>' +
+        '<div class="ac-wrap"><label>Credit Account</label><input id="j_crInput" placeholder="Type to search…" autocomplete="off">' +
+          '<div class="ac-list" id="j_crList"></div><input type="hidden" id="j_crAccount"></div>' +
+      '</div>' +
+      '<label>Details of Transaction</label><textarea id="j_details" rows="2"></textarea>' +
+      '<label>Amount</label><input type="number" id="j_amount" min="0" step="0.01">' +
+      '<div><button class="btn" id="j_submit" onclick="submitJournal()">Add Journal Entry</button></div>' +
+      '<div id="j_error" class="msg-error"></div><div id="j_ok" class="msg-ok"></div>' +
+      '</div>';
+    setupAutocomplete('j_drInput', 'j_drList', 'j_drAccount', data.accounts);
+    setupAutocomplete('j_crInput', 'j_crList', 'j_crAccount', data.accounts);
+  }).catch(err => showError('app', err));
+}
+
+function submitJournal() {
+  document.getElementById('j_error').innerText = '';
+  document.getElementById('j_ok').innerText = '';
+  const btn = document.getElementById('j_submit');
+  const entry = {
+    date: document.getElementById('j_date').value,
+    finYear: document.getElementById('j_finYear').value,
+    drAccount: document.getElementById('j_drAccount').value,
+    crAccount: document.getElementById('j_crAccount').value,
+    details: document.getElementById('j_details').value,
+    amount: document.getElementById('j_amount').value
+  };
+  if (!entry.date) { document.getElementById('j_error').innerText = 'Please select a date'; return; }
+  if (!entry.drAccount) { document.getElementById('j_error').innerText = 'Please pick a valid Debit account from the list'; return; }
+  if (!entry.crAccount) { document.getElementById('j_error').innerText = 'Please pick a valid Credit account from the list'; return; }
+
+  btn.disabled = true;
+  apiPost({ action: 'journal', entry: entry })
+    .then(res => {
+      document.getElementById('j_ok').innerText = 'Saved as Journal No. ' + res.jrnlNo;
+      document.getElementById('j_details').value = '';
+      document.getElementById('j_amount').value = '';
+      btn.disabled = false;
+      renderJournal();
+    })
+    .catch(err => { document.getElementById('j_error').innerText = err.message || err; btn.disabled = false; });
+}
+
+// ---------------------------------------------------------------------
+// Account Addition
+// ---------------------------------------------------------------------
+function renderAccount() {
+  apiGet('accountsForm').then(data => {
+    state.bsieCodes = data.bsieCodes;
+    const byType = {};
+    data.bsieCodes.forEach(c => { (byType[c.type] = byType[c.type] || []).push(c); });
+    const options = Object.keys(byType).map(t =>
+      '<optgroup label="' + escapeHtml(t) + '">' +
+      byType[t].map(c => '<option value="' + c.mapping + '">' + c.mapping + ' — ' + escapeHtml(c.label) + '</option>').join('') +
+      '</optgroup>'
+    ).join('');
+
+    document.getElementById('app').innerHTML =
+      '<div class="card">' +
+      '<h2>New Account</h2>' +
+      '<label>BSIE Mapping</label>' +
+      '<select id="a_bsie" onchange="onBsieChange()"><option value="">Select…</option>' + options + '</select>' +
+      '<div class="row">' +
+        '<div><label>Account No.</label><input id="a_acno" maxlength="4" oninput="updateAcctPreview()">' +
+          '<div class="hint">4 digits — auto-suggested, editable</div></div>' +
+      '</div>' +
+      '<label>Account Name</label><input id="a_acname" oninput="updateAcctPreview()">' +
+      '<div class="hint" style="margin-top:16px;padding:9px;background:#f3f3f3;border-radius:5px;" id="a_preview">Full account name will appear here</div>' +
+      '<div><button class="btn" id="a_submit" onclick="submitAccount()">Add Account</button></div>' +
+      '<div id="a_error" class="msg-error"></div><div id="a_ok" class="msg-ok"></div>' +
+      '</div>';
+  }).catch(err => showError('app', err));
+}
+function onBsieChange() {
+  const code = document.getElementById('a_bsie').value;
+  if (!code) return;
+  const info = state.bsieCodes.find(c => c.mapping === code);
+  apiGet('nextAcno', { type: info.typeKey }).then(d => {
+    document.getElementById('a_acno').value = d.acno;
+    updateAcctPreview();
+  }).catch(err => document.getElementById('a_error').innerText = err.message || err);
+}
+function updateAcctPreview() {
+  const acno = document.getElementById('a_acno').value.trim();
+  const name = document.getElementById('a_acname').value.trim();
+  document.getElementById('a_preview').innerText = (acno && name) ? (acno + '-' + name) : 'Full account name will appear here';
+}
+function submitAccount() {
+  document.getElementById('a_error').innerText = '';
+  document.getElementById('a_ok').innerText = '';
+  const btn = document.getElementById('a_submit');
+  const entry = {
+    bsie: document.getElementById('a_bsie').value,
+    acno: document.getElementById('a_acno').value.trim(),
+    acname: document.getElementById('a_acname').value.trim()
+  };
+  btn.disabled = true;
+  apiPost({ action: 'account', entry: entry })
+    .then(res => {
+      document.getElementById('a_ok').innerText = 'Saved: ' + res.fullacname;
+      document.getElementById('a_acname').value = '';
+      document.getElementById('a_preview').innerText = 'Full account name will appear here';
+      btn.disabled = false;
+    })
+    .catch(err => { document.getElementById('a_error').innerText = err.message || err; btn.disabled = false; });
+}
+
+// ---------------------------------------------------------------------
+// BSIE Reports
+// ---------------------------------------------------------------------
+function renderBsie() {
+  getFinYears().then(fys => {
+    document.getElementById('app').innerHTML =
+      '<div class="card no-print">' +
+      '<h2>Balance Sheet &amp; Income / Expenditure</h2>' +
+      '<div class="report-toolbar">' +
+        '<div><label>Financial Year</label><select id="b_fy" onchange="loadBsie()">' +
+          fys.map(fy => '<option value="' + fy + '">' + fy + '</option>').join('') + '</select></div>' +
+        '<div><button class="btn secondary" onclick="window.print()">Print (A4)</button></div>' +
+        '<div><button class="btn secondary" onclick="emailReport(\'bsieReportArea\', document.getElementById(\'b_fy\').value, \'BSIE\')">Email</button></div>' +
+      '</div></div>' +
+      '<div id="bsieReportArea"></div>';
+    document.getElementById('b_fy').value = fys[fys.length - 1] || '';
+    loadBsie();
+  }).catch(err => showError('app', err));
+}
+function loadBsie() {
+  const fy = document.getElementById('b_fy').value;
+  document.getElementById('printHeaderSub').innerText = 'Balance Sheet & Income / Expenditure — FY ' + fy;
+  apiGet('bsie', { finYear: fy }).then(renderBsieData).catch(err => showError('bsieReportArea', err));
+}
+function bsieGroupRows(groups) {
+  return groups.map(g => {
+    if (g.lines.length <= 1) {
+      return '<tr><td colspan="2" data-label="Item">' + escapeHtml(g.label) + '</td><td data-label="Amount">' + fmt(g.subtotal) + '</td></tr>';
+    }
+    const lines = g.lines.map(l =>
+      '<tr><td colspan="2" data-label="Item">&nbsp;&nbsp;' + escapeHtml(l.acno + '-' + l.acname) + '</td><td data-label="Amount">' + fmt(l.balance) + '</td></tr>'
+    ).join('');
+    return '<tr class="group-label"><td colspan="2" data-label="Item">' + escapeHtml(g.label) + '</td><td data-label="Amount"></td></tr>' +
+      lines +
+      '<tr class="subtotal"><td colspan="2" data-label="Subtotal">' + escapeHtml(g.label) + ' subtotal</td><td data-label="Amount">' + fmt(g.subtotal) + '</td></tr>';
+  }).join('');
+}
+function renderBsieData(d) {
+  const badge = d.balanced
+    ? '<span class="badge ok">Assets = Liabilities</span>'
+    : '<span class="badge bad">Out of balance by ' + fmt(Math.abs(d.totalAssets - d.totalLiabilities)) + '</span>';
+
+  const html =
+    '<div class="card"><h3>Balance Sheet as on 30 Jun (FY ' + escapeHtml(d.finYear) + ')' + badge + '</h3>' +
+    '<div class="cols">' +
+      '<div class="col table-wrap"><table class="report stack"><thead><tr><th colspan="2">Liabilities</th><th>Amount</th></tr></thead><tbody>' +
+        bsieGroupRows(d.liabilities) +
+        '<tr class="grand-total"><td colspan="2" data-label="Total">Total</td><td data-label="Amount">' + fmt(d.totalLiabilities) + '</td></tr>' +
+      '</tbody></table></div>' +
+      '<div class="col table-wrap"><table class="report stack"><thead><tr><th colspan="2">Assets</th><th>Amount</th></tr></thead><tbody>' +
+        bsieGroupRows(d.assets) +
+        '<tr class="grand-total"><td colspan="2" data-label="Total">Total</td><td data-label="Amount">' + fmt(d.totalAssets) + '</td></tr>' +
+      '</tbody></table></div>' +
+    '</div></div>' +
+    '<div class="card"><h3>Income &amp; Expenditure for FY ' + escapeHtml(d.finYear) + '</h3>' +
+    '<div class="cols">' +
+      '<div class="col table-wrap"><table class="report stack"><thead><tr><th colspan="2">Expenditure</th><th>Amount</th></tr></thead><tbody>' +
+        bsieGroupRows(d.expenditure) +
+        '<tr class="grand-total"><td colspan="2" data-label="Total">Total</td><td data-label="Amount">' + fmt(d.totalExpenditure) + '</td></tr>' +
+      '</tbody></table></div>' +
+      '<div class="col table-wrap"><table class="report stack"><thead><tr><th colspan="2">Income</th><th>Amount</th></tr></thead><tbody>' +
+        bsieGroupRows(d.income) +
+        '<tr class="grand-total"><td colspan="2" data-label="Total">Total</td><td data-label="Amount">' + fmt(d.totalIncome) + '</td></tr>' +
+      '</tbody></table></div>' +
+    '</div></div>';
+  document.getElementById('bsieReportArea').innerHTML = html;
+}
+
+// ---------------------------------------------------------------------
+// Ledger Reports
+// ---------------------------------------------------------------------
+function renderLedger() {
+  Promise.all([getFinYears(), apiGet('journalForm')]).then(([fys, jf]) => {
+    document.getElementById('app').innerHTML =
+      '<div class="card no-print">' +
+      '<h2>Ledger</h2>' +
+      '<div class="report-toolbar">' +
+        '<div><label>Financial Year</label><select id="l_fy" onchange="loadLedger()">' +
+          fys.map(fy => '<option value="' + fy + '">' + fy + '</option>').join('') + '</select></div>' +
+        '<div><label>Account</label><select id="l_acc" onchange="loadLedger()"><option value="ALL">All Accounts</option>' +
+          jf.accounts.map(a => '<option value="' + escapeHtml(a) + '">' + escapeHtml(a) + '</option>').join('') + '</select></div>' +
+        '<div><button class="btn secondary" onclick="window.print()">Print (A4)</button></div>' +
+        '<div><button class="btn secondary" onclick="emailReport(\'ledgerReportArea\', document.getElementById(\'l_fy\').value, \'Ledger\')">Email</button></div>' +
+      '</div></div>' +
+      '<div id="ledgerReportArea"></div>';
+    document.getElementById('l_fy').value = fys[fys.length - 1] || '';
+    loadLedger();
+  }).catch(err => showError('app', err));
+}
+function loadLedger() {
+  const fy = document.getElementById('l_fy').value;
+  const acc = document.getElementById('l_acc').value;
+  document.getElementById('printHeaderSub').innerText = 'Ledger — FY ' + fy + (acc !== 'ALL' ? ' — ' + acc : '');
+  apiGet('ledger', { finYear: fy, acno: acc }).then(renderLedgerData).catch(err => showError('ledgerReportArea', err));
+}
+function renderLedgerData(d) {
+  if (!d.accounts.length) {
+    document.getElementById('ledgerReportArea').innerHTML = '<div class="card">No entries for this selection.</div>';
+    return;
+  }
+  const html = d.accounts.map(acc => {
+    const rows = acc.entries.map(e =>
+      '<tr>' +
+      '<td data-label="Date">' + e.date + '</td>' +
+      '<td data-label="Jrnl No">' + e.jrnlNo + '</td>' +
+      '<td data-label="Particulars">' + escapeHtml(e.particulars) + (e.details ? ' — ' + escapeHtml(e.details) : '') + '</td>' +
+      '<td data-label="Debit">' + (e.debit ? fmt(e.debit) : '') + '</td>' +
+      '<td data-label="Credit">' + (e.credit ? fmt(e.credit) : '') + '</td>' +
+      '<td data-label="Balance">' + fmt(e.balance) + '</td>' +
+      '</tr>'
+    ).join('');
+    return '<div class="card account-block">' +
+      '<div class="account-header"><span>' + escapeHtml(acc.fullacname) + '</span><span>Closing: ' + fmt(acc.closingBalance) + '</span></div>' +
+      '<div class="table-wrap"><table class="report stack"><thead><tr><th>Date</th><th>Jrnl No</th><th>Particulars</th>' +
+      '<th>Debit</th><th>Credit</th><th>Balance</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
+  }).join('');
+  document.getElementById('ledgerReportArea').innerHTML = html;
+}
+
+// ---------------------------------------------------------------------
+// Financial Year Closing
+// ---------------------------------------------------------------------
+function renderClose() {
+  getFinYears().then(fys => {
+    document.getElementById('app').innerHTML =
+      '<div class="card">' +
+      '<h2>Financial Year Closing</h2>' +
+      '<p class="hint">Posts opening-balance entries for the next FY from this FY\'s closing Asset/Liability balances. Requires the admin passcode.</p>' +
+      '<label>Financial Year to Close</label>' +
+      '<select id="c_fy" onchange="previewClose()">' + fys.map(fy => '<option value="' + fy + '">' + fy + '</option>').join('') + '</select>' +
+      '<div id="c_preview"></div>' +
+      '<label>Admin Passcode</label><input type="password" id="c_pass">' +
+      '<div><button class="btn" id="c_confirm" onclick="confirmClose()" disabled>Approve &amp; Close Year</button></div>' +
+      '<div id="c_error" class="msg-error"></div><div id="c_ok" class="msg-ok"></div>' +
+      '</div>';
+    document.getElementById('c_fy').value = fys[fys.length - 1] || '';
+    previewClose();
+  }).catch(err => showError('app', err));
+}
+function previewClose() {
+  const fy = document.getElementById('c_fy').value;
+  document.getElementById('c_preview').innerHTML = '<p class="hint">Loading preview…</p>';
+  document.getElementById('c_confirm').disabled = true;
+  apiGet('closeYearPreview', { finYear: fy }).then(p => {
+    if (p.newFinYearAlreadyHasEntries) {
+      document.getElementById('c_preview').innerHTML =
+        '<div class="msg-error">FY ' + p.newFinYear + ' already has journal entries — this year appears to be closed already.</div>';
+      return;
+    }
+    if (!p.entries.length) {
+      document.getElementById('c_preview').innerHTML = '<div class="msg-error">No non-zero Asset/Liability balances found for ' + fy + '.</div>';
+      return;
+    }
+    const rows = p.entries.map(e =>
+      '<tr><td data-label="Debit">' + escapeHtml(e.drAccount) + '</td><td data-label="Credit">' + escapeHtml(e.crAccount) + '</td><td data-label="Amount">' + fmt(e.amount) + '</td></tr>'
+    ).join('');
+    document.getElementById('c_preview').innerHTML =
+      '<h3>Preview: entries to post into FY ' + p.newFinYear + '</h3>' +
+      '<div class="table-wrap"><table class="report stack"><thead><tr><th>Debit</th><th>Credit</th><th>Amount</th></tr></thead><tbody>' + rows + '</tbody></table></div>' +
+      '<p class="hint">' + p.entries.length + ' entries will be posted, dated 1 July of FY ' + p.newFinYear + ', against ' + escapeHtml(p.bfAccount) + '.</p>';
+    document.getElementById('c_confirm').disabled = false;
+  }).catch(err => { document.getElementById('c_preview').innerHTML = ''; document.getElementById('c_error').innerText = err.message || err; });
+}
+function confirmClose() {
+  const fy = document.getElementById('c_fy').value;
+  const pass = document.getElementById('c_pass').value;
+  document.getElementById('c_error').innerText = '';
+  document.getElementById('c_ok').innerText = '';
+  if (!pass) { document.getElementById('c_error').innerText = 'Enter the admin passcode'; return; }
+  if (!confirm('This will post opening-balance entries into the next financial year. Continue?')) return;
+  document.getElementById('c_confirm').disabled = true;
+  apiPost({ action: 'closeYear', finYear: fy, passcode: pass })
+    .then(res => {
+      document.getElementById('c_ok').innerText = 'Closed. ' + res.entriesCreated + ' opening-balance entries posted into FY ' + res.newFinYear + '.';
+      state.finYears = [];
+      document.getElementById('c_pass').value = '';
+    })
+    .catch(err => { document.getElementById('c_error').innerText = err.message || err; document.getElementById('c_confirm').disabled = false; });
+}
+
+// ---------------------------------------------------------------------
+// Email report
+// ---------------------------------------------------------------------
+function emailReport(areaId, finYear, kind) {
+  const email = prompt('Send this report to which email address?');
+  if (!email) return;
+  const htmlBody =
+    '<div style="font-family:Arial,sans-serif;"><h2 style="margin-bottom:0;">Indian Bank Retirees\' Association</h2>' +
+    '<p style="margin-top:2px;color:#555;">' + escapeHtml(kind) + ' — FY ' + escapeHtml(finYear) + '</p>' +
+    document.getElementById(areaId).innerHTML + '</div>';
+  toast('Sending…');
+  apiPost({ action: 'email', toEmail: email, subject: 'IBRA ' + kind + ' — FY ' + finYear, htmlBody: htmlBody })
+    .then(() => toast('Report emailed to ' + email))
+    .catch(err => toast(err.message || err, true));
+}
+
+// ---------------------------------------------------------------------
+// Misc
+// ---------------------------------------------------------------------
+function showError(containerId, err) {
+  document.getElementById(containerId).innerHTML = '<div class="card msg-error">' + escapeHtml(err.message || err) + '</div>';
+}
+
+router();
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+</script>
+</body>
+</html>

@@ -7,15 +7,27 @@
  * Copy the resulting /exec URL into WEB_APP_URL at the top of
  * JournalForm.html and AccountsForm.html (hosted on GitHub Pages).
  *
- * Sheet 1 "Journal"  columns: date, jrnlNo, drAccount, crAccount, details, amount, finYear
- * Sheet 2 "Accounts" columns: acno, bsie, type, acname, fullacname
+ * Sheet 1 "Journal"   columns: date, jrnlNo, drAccount, crAccount, details, amount, finYear
+ * Sheet 2 "Accounts"  columns: acno, bsie, type, acname, fullacname
+ * Sheet 3 "BSIEcodes" columns: Type, mapping, Label
+ *   Type is one of: Assets, Liabilities, Expenditure, Income
  */
 
 const JOURNAL_SHEET = 'Journal';
 const ACCOUNTS_SHEET = 'Accounts';
+const BSIE_SHEET = 'BSIEcodes';
 
 // acno first digit <-> account type
 const TYPE_PREFIX = { 'ASSET': '1', 'LIABILITY': '2', 'PAYMENT': '3', 'RECEIPT': '4' };
+
+// BSIEcodes "Type" column <-> internal type key
+const BSIE_TYPE_TO_KEY = { 'ASSETS': 'ASSET', 'LIABILITIES': 'LIABILITY', 'EXPENDITURE': 'PAYMENT', 'INCOME': 'RECEIPT' };
+
+// Special BSIE mapping codes used as computed surplus/deficit plug lines
+const LIABILITY_SURPLUS_CODE = '2-05'; // Excess of Income over Expenditure Carried over
+const ASSET_DEFICIT_CODE = '1-07';     // Excess of Expenditure over Income Carried over
+const EXPENDITURE_SURPLUS_CODE = '3-10'; // Excess of Income over Expenditure (I&E statement)
+const INCOME_DEFICIT_CODE = '4-06';      // Excess of Expenditure over Income (I&E statement)
 
 // ---------------------------------------------------------------------
 // Web App entry points
@@ -31,6 +43,7 @@ function doGet(e) {
     else if (action === 'finYears') data = { finYears: getFinYearList_() };
     else if (action === 'ledger') data = getLedgerData(e.parameter.finYear, e.parameter.acno || 'ALL');
     else if (action === 'bsie') data = getBsieData(e.parameter.finYear);
+    else if (action === 'closeYearPreview') data = previewCloseFinancialYear(e.parameter.finYear);
     else throw new Error('Unknown action: ' + action);
     return jsonOutput_({ ok: true, data: data });
   } catch (err) {
@@ -45,6 +58,8 @@ function doPost(e) {
     let data;
     if (body.action === 'journal') data = submitJournalEntry(body.entry);
     else if (body.action === 'account') data = submitAccountEntry(body.entry);
+    else if (body.action === 'closeYear') data = closeFinancialYear(body.finYear, body.passcode);
+    else if (body.action === 'email') data = sendReportEmail(body.toEmail, body.subject, body.htmlBody);
     else throw new Error('Unknown action: ' + body.action);
     return jsonOutput_({ ok: true, data: data });
   } catch (err) {
@@ -70,6 +85,41 @@ function getAccountsSheet_() {
   const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(ACCOUNTS_SHEET);
   if (!sheet) throw new Error('Sheet "' + ACCOUNTS_SHEET + '" not found');
   return sheet;
+}
+
+function getBsieSheet_() {
+  const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName(BSIE_SHEET);
+  if (!sheet) throw new Error('Sheet "' + BSIE_SHEET + '" not found');
+  return sheet;
+}
+
+/** Reads BSIEcodes sheet -> [{type:'Assets', typeKey:'ASSET', mapping:'1-01', label:'Fixed Deposits'}, ...] */
+function getBsieCodes_() {
+  const values = getBsieSheet_().getDataRange().getValues();
+  const col = headerMap_(values);
+  const list = [];
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    const mapping = String(row[col['mapping']] || '').trim();
+    if (!mapping) continue;
+    const typeRaw = String(row[col['type']] || '').trim();
+    const typeKey = BSIE_TYPE_TO_KEY[typeRaw.toUpperCase()];
+    if (!typeKey) throw new Error('Unknown BSIE Type "' + typeRaw + '" in ' + BSIE_SHEET + ' (expected Assets/Liabilities/Expenditure/Income)');
+    list.push({
+      type: typeRaw,
+      typeKey: typeKey,
+      mapping: mapping,
+      label: String(row[col['label']] || mapping).trim()
+    });
+  }
+  return list;
+}
+
+function getBsieCodeInfo_(mapping) {
+  const codes = getBsieCodes_();
+  const found = codes.find(c => c.mapping === mapping);
+  if (!found) throw new Error('Unknown BSIE mapping code: ' + mapping);
+  return found;
 }
 
 function headerMap_(values) {
@@ -189,7 +239,7 @@ function submitJournalEntry(entry) {
 // ---------------------------------------------------------------------
 
 function getAccountsFormData() {
-  return { types: Object.keys(TYPE_PREFIX) };
+  return { bsieCodes: getBsieCodes_() };
 }
 
 function getNextAcno(type) {
@@ -214,8 +264,16 @@ function submitAccountEntry(entry) {
   const values = sheet.getDataRange().getValues();
   const col = headerMap_(values);
 
+  if (!entry.bsie) throw new Error('BSIE mapping is required');
+  const bsieInfo = getBsieCodeInfo_(entry.bsie); // throws if unknown code
+  const type = bsieInfo.typeKey;
+
   if (!/^[1-4]\d{3}$/.test(entry.acno)) {
     throw new Error('Account number must be 4 digits, first digit 1-4 (1=Asset,2=Liability,3=Payment,4=Receipt)');
+  }
+  if (entry.acno.charAt(0) !== TYPE_PREFIX[type]) {
+    throw new Error('Account number ' + entry.acno + ' should start with ' + TYPE_PREFIX[type] +
+      ' for BSIE type ' + bsieInfo.type + ' (' + type + ')');
   }
   for (let i = 1; i < values.length; i++) {
     if (String(values[i][col['acno']]) === entry.acno) {
@@ -223,15 +281,14 @@ function submitAccountEntry(entry) {
     }
   }
   if (!entry.acname) throw new Error('Account name is required');
-  if (!entry.type) throw new Error('Account type is required');
 
   const fullacname = entry.acno + '-' + entry.acname;
   const header = values[0].map(h => String(h).trim().toLowerCase());
   const row = header.map(h => {
     switch (h) {
       case 'acno': return entry.acno;
-      case 'bsie': return entry.bsie || '';
-      case 'type': return entry.type;
+      case 'bsie': return entry.bsie;
+      case 'type': return type;
       case 'acname': return entry.acname;
       case 'fullacname': return fullacname;
       default: return '';
@@ -339,7 +396,7 @@ function getLedgerData(finYear, acnoOrAll) {
   const rows = getJournalRowsForFY_(finYear);
 
   const targets = (acnoOrAll === 'ALL')
-    ? accounts
+    ? accounts.slice().sort((a, b) => a.acno.localeCompare(b.acno))
     : accounts.filter(a => a.fullacname === acnoOrAll);
 
   const result = targets.map(acc => {
@@ -375,43 +432,66 @@ function getLedgerData(finYear, acnoOrAll) {
 }
 
 /**
- * Balance Sheet + Income & Expenditure for a finYear, grouped by BSIE code.
+ * Balance Sheet + Income & Expenditure for a finYear, grouped by BSIE code
+ * using the BSIEcodes sheet as the structural source of truth (labels,
+ * ordering, and inclusion of zero-balance lines).
  */
 function getBsieData(finYear) {
   if (!finYear) throw new Error('finYear is required');
   const balances = computeAccountBalances_(finYear);
+  const codes = getBsieCodes_();
 
-  function grouped(type) {
-    const groups = {}; // bsie code -> {bsie, lines:[], subtotal}
-    Object.keys(balances).forEach(fullacname => {
-      const rec = balances[fullacname];
-      if (rec.account.type !== type) return;
-      const code = rec.account.bsie || '(unmapped)';
-      if (!groups[code]) groups[code] = { bsie: code, lines: [], subtotal: 0 };
-      groups[code].lines.push({
-        acno: rec.account.acno,
-        acname: rec.account.acname,
-        balance: rec.balance
+  function sectionFor(typeKey) {
+    return codes.filter(c => c.typeKey === typeKey).map(c => {
+      const lines = [];
+      let subtotal = 0;
+      Object.keys(balances).forEach(fullacname => {
+        const rec = balances[fullacname];
+        if (rec.account.type === typeKey && rec.account.bsie === c.mapping) {
+          lines.push({ acno: rec.account.acno, acname: rec.account.acname, balance: rec.balance });
+          subtotal += rec.balance;
+        }
       });
-      groups[code].subtotal += rec.balance;
+      return { mapping: c.mapping, label: c.label, lines: lines, subtotal: subtotal };
     });
-    return Object.keys(groups).sort().map(k => groups[k]);
   }
 
-  const liabilities = grouped('LIABILITY');
-  const assets = grouped('ASSET');
-  const income = grouped('RECEIPT');
-  const expenditure = grouped('PAYMENT');
+  const liabilities = sectionFor('LIABILITY');
+  const assets = sectionFor('ASSET');
+  const expenditure = sectionFor('PAYMENT');
+  const income = sectionFor('RECEIPT');
 
   const sum = arr => arr.reduce((s, g) => s + g.subtotal, 0);
+  const excess = sum(income) - sum(expenditure); // positive = surplus, negative = deficit
 
-  const totalIncome = sum(income);
-  const totalExpenditure = sum(expenditure);
-  const excess = totalIncome - totalExpenditure; // positive = surplus, negative = deficit
+  function setPlug(list, mapping, amount) {
+    const g = list.find(x => x.mapping === mapping);
+    if (!g) return; // code not present in BSIEcodes sheet — silently skip
+    if (Math.abs(amount) > 0.005) {
+      g.subtotal = amount;
+      g.lines = [{ acno: '', acname: '(computed)', balance: amount }];
+    } else {
+      g.subtotal = 0;
+      g.lines = [];
+    }
+  }
 
-  const totalLiabilitiesRaw = sum(liabilities);
+  if (excess >= 0) {
+    setPlug(liabilities, LIABILITY_SURPLUS_CODE, excess);
+    setPlug(assets, ASSET_DEFICIT_CODE, 0);
+    setPlug(expenditure, EXPENDITURE_SURPLUS_CODE, excess);
+    setPlug(income, INCOME_DEFICIT_CODE, 0);
+  } else {
+    setPlug(liabilities, LIABILITY_SURPLUS_CODE, 0);
+    setPlug(assets, ASSET_DEFICIT_CODE, -excess);
+    setPlug(expenditure, EXPENDITURE_SURPLUS_CODE, 0);
+    setPlug(income, INCOME_DEFICIT_CODE, -excess);
+  }
+
+  const totalLiabilities = sum(liabilities);
   const totalAssets = sum(assets);
-  const totalLiabilities = totalLiabilitiesRaw + excess;
+  const totalExpenditure = sum(expenditure);
+  const totalIncome = sum(income);
 
   return {
     finYear: finYear,
@@ -419,7 +499,6 @@ function getBsieData(finYear) {
     assets: assets,
     income: income,
     expenditure: expenditure,
-    totalLiabilitiesRaw: totalLiabilitiesRaw,
     excess: excess,
     totalLiabilities: totalLiabilities,
     totalAssets: totalAssets,
@@ -427,4 +506,127 @@ function getBsieData(finYear) {
     totalIncome: totalIncome,
     totalExpenditure: totalExpenditure
   };
+}
+
+// ---------------------------------------------------------------------
+// Financial Year Closing
+// ---------------------------------------------------------------------
+
+function checkPasscode_(candidate) {
+  const expected = PropertiesService.getScriptProperties().getProperty('ADMIN_PASSCODE');
+  if (!expected) throw new Error('Admin passcode is not configured. In Apps Script: Project Settings > Script Properties, add ADMIN_PASSCODE.');
+  if (!candidate || candidate !== expected) throw new Error('Incorrect passcode');
+}
+
+function nextFinYear_(finYear) {
+  const startYear = parseInt(finYear.split('-')[0], 10);
+  const newStart = startYear + 1;
+  return newStart + '-' + String(newStart + 1).slice(-2);
+}
+
+/**
+ * Computes the opening-balance journal entries that Financial Year Closing
+ * would post, without writing anything. Real (Asset/Liability) accounts are
+ * carried forward against the account mapped to BSIE code 2-01; Payment/
+ * Receipt (nominal) accounts are not carried forward — they naturally start
+ * the new FY at zero since the Journal is filtered per finYear.
+ */
+function buildCloseYearPlan_(oldFinYear) {
+  if (!oldFinYear) throw new Error('finYear is required');
+  const newFinYear = nextFinYear_(oldFinYear);
+  const balances = computeAccountBalances_(oldFinYear);
+  const accounts = getAllAccounts_();
+
+  const bfCandidates = accounts.filter(a => a.type === 'LIABILITY' && a.bsie === '2-01');
+  if (bfCandidates.length === 0) throw new Error('No account is mapped to BSIE code 2-01 (B/f Previous Balance Sheet) — add one in Accounts before closing.');
+  if (bfCandidates.length > 1) throw new Error('More than one account is mapped to BSIE code 2-01 — there should be exactly one.');
+  const bfAccount = bfCandidates[0];
+
+  const entries = [];
+  accounts.forEach(acc => {
+    if (acc.fullacname === bfAccount.fullacname) return;
+    if (acc.type !== 'ASSET' && acc.type !== 'LIABILITY') return; // nominal accounts reset, not carried
+    const rec = balances[acc.fullacname];
+    const balance = rec ? rec.balance : 0;
+    if (Math.abs(balance) < 0.005) return;
+
+    if (acc.type === 'ASSET') {
+      entries.push({ drAccount: acc.fullacname, crAccount: bfAccount.fullacname, amount: Math.round(balance * 100) / 100 });
+    } else {
+      entries.push({ drAccount: bfAccount.fullacname, crAccount: acc.fullacname, amount: Math.round(balance * 100) / 100 });
+    }
+  });
+
+  return { oldFinYear: oldFinYear, newFinYear: newFinYear, bfAccount: bfAccount.fullacname, entries: entries };
+}
+
+function previewCloseFinancialYear(oldFinYear) {
+  const plan = buildCloseYearPlan_(oldFinYear);
+  const existing = getJournalRowsForFY_(plan.newFinYear);
+  return {
+    oldFinYear: plan.oldFinYear,
+    newFinYear: plan.newFinYear,
+    bfAccount: plan.bfAccount,
+    entries: plan.entries,
+    newFinYearAlreadyHasEntries: existing.length > 0
+  };
+}
+
+function closeFinancialYear(oldFinYear, passcode) {
+  checkPasscode_(passcode);
+  const plan = buildCloseYearPlan_(oldFinYear);
+
+  const existing = getJournalRowsForFY_(plan.newFinYear);
+  if (existing.length > 0) {
+    throw new Error('FY ' + plan.newFinYear + ' already has ' + existing.length +
+      ' journal entries — closing again would duplicate opening balances. Remove them first if you need to redo this.');
+  }
+  if (plan.entries.length === 0) throw new Error('Nothing to carry forward — no non-zero Asset/Liability balances found for ' + oldFinYear);
+
+  const sheet = getJournalSheet_();
+  const values = sheet.getDataRange().getValues();
+  const col = headerMap_(values);
+  const header = values[0].map(h => String(h).trim().toLowerCase());
+
+  let maxJrnlNo = 0;
+  for (let i = 1; i < values.length; i++) {
+    const n = Number(values[i][col['jrnlno']]);
+    if (!isNaN(n) && n > maxJrnlNo) maxJrnlNo = n;
+  }
+
+  const openDate = finYearBounds_(plan.newFinYear).start;
+  const rows = plan.entries.map((e, idx) => {
+    const jrnlNo = maxJrnlNo + 1 + idx;
+    return header.map(h => {
+      switch (h) {
+        case 'date': return openDate;
+        case 'jrnlno': return jrnlNo;
+        case 'draccount': return e.drAccount;
+        case 'craccount': return e.crAccount;
+        case 'details': return 'Opening Balance b/f from ' + plan.oldFinYear;
+        case 'amount': return e.amount;
+        case 'finyear': return plan.newFinYear;
+        default: return '';
+      }
+    });
+  });
+
+  sheet.getRange(sheet.getLastRow() + 1, 1, rows.length, header.length).setValues(rows);
+  return { newFinYear: plan.newFinYear, entriesCreated: rows.length };
+}
+
+// ---------------------------------------------------------------------
+// Email
+// ---------------------------------------------------------------------
+
+function sendReportEmail(toEmail, subject, htmlBody) {
+  if (!toEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(toEmail)) throw new Error('Please enter a valid email address');
+  if (!subject) subject = 'Report';
+  MailApp.sendEmail({
+    to: toEmail,
+    subject: subject,
+    htmlBody: htmlBody,
+    body: 'This report requires an HTML-capable email client to view.'
+  });
+  return { sent: true, to: toEmail };
 }

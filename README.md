@@ -1,15 +1,10 @@
-# Journal & Accounts Data Entry — GitHub-hosted forms + Apps Script Web App
+# IBRA Accounts — Setup
 
-Architecture: the two HTML pages live on **GitHub Pages** (or anywhere static).
-They call a **Google Apps Script Web App URL** as their backend API, which reads
-and writes your Google Sheet directly.
+A single installable web app (PWA) covering Journal entry, Account Addition,
+BSIE Reports, Ledger Reports, and Financial Year Closing — backed by your
+Google Sheet via an Apps Script Web App.
 
-⚠️ **Important**: this is *not* the same as Google Sheets' "Publish to web" link.
-Publishing gives a read-only CSV/HTML snapshot and can't accept submissions. You
-need the Apps Script **Web App /exec URL** from the deployment step below.
-
-## 1. Prepare the Google Sheet
-Two tabs, exact header row:
+## 1. Google Sheet — three tabs, exact header rows
 
 **Journal**
 ```
@@ -21,74 +16,70 @@ date | jrnlNo | drAccount | crAccount | details | amount | finYear
 acno | bsie | type | acname | fullacname
 ```
 
-## 2. Add and deploy the script
+**BSIEcodes**
+```
+Type | mapping | Label
+```
+`Type` must be exactly one of: `Assets`, `Liabilities`, `Expenditure`, `Income`.
+Must include `2-05` (Liabilities, surplus carry-over) and `1-07` (Assets,
+deficit carry-over) for Financial Year Closing and the BSIE report to balance.
+
+## 2. Deploy the Apps Script backend
 1. In the Sheet: **Extensions > Apps Script**.
-2. Replace the default code in `Code.gs` with the contents of `Code.gs` from this package.
-3. **Deploy > New deployment**.
-   - Type: **Web app**
+2. Replace the code in `Code.gs` with the contents of `Code.gs` from this package.
+3. **Set the admin passcode**: Project Settings (gear icon) > **Script Properties**
+   > Add property: key `ADMIN_PASSCODE`, value = whatever passcode you want to
+   protect Financial Year Closing with.
+4. **Deploy > New deployment > Web app**
    - Execute as: **Me**
    - Who has access: **Anyone**
-4. Click **Deploy**, authorize when prompted.
-5. Copy the **Web app URL** (ends in `/exec`) — this is your `WEB_APP_URL`.
+5. Deploy, authorize when prompted, copy the **Web app URL** (ends `/exec`).
 
-Whenever you edit `Code.gs` later: **Deploy > Manage deployments > ✎ Edit > New version > Deploy**
-(the same `/exec` URL keeps working — no need to update the forms).
+Whenever you edit `Code.gs` later: **Deploy > Manage deployments > ✎ Edit >
+New version > Deploy** (same `/exec` URL keeps working).
 
-## 3. Configure and host the pages
-1. Open `JournalForm.html`, `AccountsForm.html`, `Ledger.html`, `Bsie.html`.
-2. In each, replace `PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE` with the `/exec` URL from step 2.
-3. Push all four files to a GitHub repo, enable **GitHub Pages** (Settings > Pages > deploy from branch).
-4. Share the resulting URLs (e.g. `https://yourname.github.io/repo/JournalForm.html`)
-   with whoever needs to enter data or view reports.
+## 3. Configure and host the app
+1. Open `index.html`, replace `PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE` with your `/exec` URL.
+2. Push `index.html`, `manifest.json`, `icon.svg`, `sw.js` to a GitHub repo (same folder).
+3. Enable **GitHub Pages** (Settings > Pages > deploy from branch).
+4. Share the resulting URL (e.g. `https://yourname.github.io/repo/`).
+5. On a phone: open the link > browser menu > **Add to Home Screen / Install app**.
 
-## Pages
-| File | Purpose |
+## What's inside
+| Menu item | What it does |
 |---|---|
-| `JournalForm.html` | Add a Journal entry |
-| `AccountsForm.html` | Add a new Account |
-| `Ledger.html` | Per-account transaction history + running balance for a chosen FY |
-| `Bsie.html` | Balance Sheet + Income & Expenditure for a chosen FY |
+| About / Dos & Don'ts | Landing page (default view) |
+| Journal | Add a Journal entry; Debit/Credit fields filter as you type |
+| Account Addition | Add a new Account by picking a BSIE mapping (Type + acno prefix auto-derived) |
+| BSIE Reports | Balance Sheet + Income & Expenditure for any FY, print (A4) or email |
+| Ledger Reports | Per-account transaction history + running balance for any FY, print or email |
+| Financial Year Closing | Passcode-protected. Preview then approve — posts opening-balance entries into the next FY |
 
-## How Ledger/BSIE are computed
-- Both are scoped to a **selected Financial Year**, filtering the continuous
-  Journal sheet by its `finYear` column — this reproduces exactly what your old
-  per-year files showed, since the opening-balance ("B/F FROM LAST BS") entry is
-  itself a Journal row dated at the start of each FY.
-- **Sign convention** (matches your existing data): Asset & Payment(expenditure)
-  accounts are debit-normal (`Debits − Credits`); Liability & Receipt(income)
-  accounts are credit-normal (`Credits − Debits`).
-- **BSIE grouping**: accounts sharing the same `bsie` code (e.g. your three bank
-  accounts under `1-04`) are listed individually with a subtotal under that code
-  — there's no separate "group label" field in the Accounts sheet, so the code
-  itself is shown as the heading. Say the word if you'd rather add a small
-  reference table mapping BSIE codes to descriptive labels.
-- **Balance check**: `Bsie.html` shows a green "Assets = Liabilities" badge, or a
-  red mismatch amount — a useful sanity check that catches mis-typed account
-  types or bsie codes.
-- The `excess`/`Excess of Income over Expenditure` line is a computed plug
-  (Income − Expenditure for the year), not a journal-posted figure — same as
-  your original BSIE sheet.
-
-## Notes / current assumptions
-- **finYear** format is `"2025-26"` (Jul–Jun), auto-detected from the latest finYear
-  already in the Journal sheet (or today's date if the sheet is empty).
-- **jrnlNo** is one global increasing sequence across the whole sheet (last row's
-  jrnlNo + 1) — not reset each financial year.
-- **acno**: first digit fixed by Account Type — `1=Asset, 2=Liability, 3=Payment,
-  4=Receipt`. The form suggests the next free number in that series; editable.
-- **No login / no audit trail.** "Who has access: Anyone" means *anyone with the
-  page link* can submit entries — there's no per-person identity, and the Sheet
-  itself isn't shared, only the API. This is easier to share widely, but also
-  means you can't restrict who submits or see who entered what. If that becomes
-  a requirement, it's a bigger change (Google account-gated access + logging).
-- The POST request uses `Content-Type: text/plain` on purpose — this avoids a
-  CORS preflight that Apps Script Web Apps don't handle, but the body is still
-  parsed as JSON server-side. Don't change this to `application/json`.
+## Key design notes
+- **Per-year scoping**: reports filter the continuous Journal by `finYear`.
+- **Sign convention**: Asset/Expenditure accounts are debit-normal; Liability/Income accounts are credit-normal.
+- **Financial Year Closing** carries forward every non-zero Asset/Liability
+  account balance against the account mapped to BSIE code `2-01`, dated 1 July
+  of the new FY. Payment/Receipt (nominal) accounts are *not* carried forward
+  — they naturally start at zero. It refuses to run if the next FY already has
+  entries, to prevent duplicate opening balances.
+- **No in-app delete/purge/account-edit** — by design, you handle those
+  directly in the Google Sheet.
+- **No login system.** "Anyone with the link" can enter Journal/Account data.
+  Financial Year Closing is gated by the `ADMIN_PASSCODE` script property —
+  anyone with the passcode can close a year, there's no per-person identity.
+- **Journal numbers may duplicate** if two people submit at nearly the same
+  moment — the app doesn't block this; fix duplicates directly in the Sheet
+  if it happens.
+- **Email** sends from the Sheet owner's Google account (since the script runs
+  "Execute as: Me"), to whatever address is entered on that report at send time.
+- **PWA**: installable via `manifest.json` + `sw.js`; the service worker only
+  caches the app shell (HTML/CSS/JS) for offline *loading* — it does not queue
+  offline Journal submissions. You still need connectivity to actually save
+  data or load reports.
 
 ## Easy tweaks
-- **jrnlNo reset per year**: in `Code.gs`, filter by `finYear` before computing
-  `maxJrnlNo` in both `getJournalFormData()` and `submitJournalEntry()`.
+- **jrnlNo reset per year** instead of one global sequence: filter by
+  `finYear` before computing `maxJrnlNo` in `Code.gs`.
 - **Different finYear format**: change `finYearFromDate_()`.
-- **Restrict access**: change deployment's "Who has access" to
-  "Anyone with a Google account" — forms would then need Google sign-in handling,
-  which isn't implemented here yet.
+- **Change admin passcode**: edit the `ADMIN_PASSCODE` Script Property — no redeploy needed.
