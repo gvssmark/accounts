@@ -28,6 +28,9 @@ function doGet(e) {
     if (action === 'journalForm') data = getJournalFormData();
     else if (action === 'accountsForm') data = getAccountsFormData();
     else if (action === 'nextAcno') data = { acno: getNextAcno(e.parameter.type) };
+    else if (action === 'finYears') data = { finYears: getFinYearList_() };
+    else if (action === 'ledger') data = getLedgerData(e.parameter.finYear, e.parameter.acno || 'ALL');
+    else if (action === 'bsie') data = getBsieData(e.parameter.finYear);
     else throw new Error('Unknown action: ' + action);
     return jsonOutput_({ ok: true, data: data });
   } catch (err) {
@@ -237,4 +240,191 @@ function submitAccountEntry(entry) {
 
   sheet.appendRow(row);
   return { fullacname: fullacname };
+}
+
+// ---------------------------------------------------------------------
+// Ledger & BSIE
+// ---------------------------------------------------------------------
+
+// Types whose normal balance is Debit - Credit vs Credit - Debit
+const DEBIT_NORMAL_TYPES = { 'ASSET': true, 'PAYMENT': true };
+
+function getFinYearList_() {
+  const values = getJournalSheet_().getDataRange().getValues();
+  const col = headerMap_(values);
+  const set = {};
+  for (let i = 1; i < values.length; i++) {
+    const fy = values[i][col['finyear']];
+    if (fy) set[String(fy)] = true;
+  }
+  return Object.keys(set).sort(compareFinYear_);
+}
+
+function getAllAccounts_() {
+  const values = getAccountsSheet_().getDataRange().getValues();
+  const col = headerMap_(values);
+  const list = [];
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    if (!row[col['acno']]) continue;
+    list.push({
+      acno: String(row[col['acno']]),
+      bsie: String(row[col['bsie']] || ''),
+      type: String(row[col['type']] || '').toUpperCase(),
+      acname: String(row[col['acname']] || ''),
+      fullacname: String(row[col['fullacname']] || '')
+    });
+  }
+  return list;
+}
+
+function getJournalRowsForFY_(finYear) {
+  const values = getJournalSheet_().getDataRange().getValues();
+  const col = headerMap_(values);
+  const rows = [];
+  for (let i = 1; i < values.length; i++) {
+    const row = values[i];
+    if (String(row[col['finyear']]) !== finYear) continue;
+    rows.push({
+      date: row[col['date']],
+      jrnlNo: row[col['jrnlno']],
+      drAccount: String(row[col['draccount']]),
+      crAccount: String(row[col['craccount']]),
+      details: String(row[col['details']] || ''),
+      amount: Number(row[col['amount']]) || 0
+    });
+  }
+  rows.sort((a, b) => {
+    const d = new Date(a.date) - new Date(b.date);
+    return d !== 0 ? d : (Number(a.jrnlNo) - Number(b.jrnlNo));
+  });
+  return rows;
+}
+
+/**
+ * Per-account Total Debits / Total Credits / Balance for a given finYear,
+ * mirroring the Accounts sheet formulas but scoped to one year.
+ */
+function computeAccountBalances_(finYear) {
+  const accounts = getAllAccounts_();
+  const rows = getJournalRowsForFY_(finYear);
+
+  const byFullName = {};
+  accounts.forEach(a => {
+    byFullName[a.fullacname] = { account: a, totalDebits: 0, totalCredits: 0 };
+  });
+
+  rows.forEach(r => {
+    if (byFullName[r.drAccount]) byFullName[r.drAccount].totalDebits += r.amount;
+    if (byFullName[r.crAccount]) byFullName[r.crAccount].totalCredits += r.amount;
+  });
+
+  Object.keys(byFullName).forEach(k => {
+    const rec = byFullName[k];
+    const debitNormal = !!DEBIT_NORMAL_TYPES[rec.account.type];
+    rec.balance = debitNormal
+      ? (rec.totalDebits - rec.totalCredits)
+      : (rec.totalCredits - rec.totalDebits);
+  });
+
+  return byFullName; // fullacname -> {account, totalDebits, totalCredits, balance}
+}
+
+/**
+ * Ledger for a finYear. acno = 'ALL' for every account, or a specific fullacname.
+ */
+function getLedgerData(finYear, acnoOrAll) {
+  if (!finYear) throw new Error('finYear is required');
+  const accounts = getAllAccounts_();
+  const rows = getJournalRowsForFY_(finYear);
+
+  const targets = (acnoOrAll === 'ALL')
+    ? accounts
+    : accounts.filter(a => a.fullacname === acnoOrAll);
+
+  const result = targets.map(acc => {
+    const debitNormal = !!DEBIT_NORMAL_TYPES[acc.type];
+    let running = 0;
+    const entries = [];
+    rows.forEach(r => {
+      let debit = 0, credit = 0, particulars = '';
+      if (r.drAccount === acc.fullacname) { debit = r.amount; particulars = r.crAccount; }
+      else if (r.crAccount === acc.fullacname) { credit = r.amount; particulars = r.drAccount; }
+      else return;
+      running += debitNormal ? (debit - credit) : (credit - debit);
+      entries.push({
+        date: fmtDate_(new Date(r.date)),
+        jrnlNo: r.jrnlNo,
+        particulars: particulars,
+        details: r.details,
+        debit: debit,
+        credit: credit,
+        balance: running
+      });
+    });
+    return {
+      acno: acc.acno,
+      fullacname: acc.fullacname,
+      type: acc.type,
+      entries: entries,
+      closingBalance: running
+    };
+  }).filter(a => acnoOrAll !== 'ALL' || a.entries.length > 0);
+
+  return { finYear: finYear, accounts: result };
+}
+
+/**
+ * Balance Sheet + Income & Expenditure for a finYear, grouped by BSIE code.
+ */
+function getBsieData(finYear) {
+  if (!finYear) throw new Error('finYear is required');
+  const balances = computeAccountBalances_(finYear);
+
+  function grouped(type) {
+    const groups = {}; // bsie code -> {bsie, lines:[], subtotal}
+    Object.keys(balances).forEach(fullacname => {
+      const rec = balances[fullacname];
+      if (rec.account.type !== type) return;
+      const code = rec.account.bsie || '(unmapped)';
+      if (!groups[code]) groups[code] = { bsie: code, lines: [], subtotal: 0 };
+      groups[code].lines.push({
+        acno: rec.account.acno,
+        acname: rec.account.acname,
+        balance: rec.balance
+      });
+      groups[code].subtotal += rec.balance;
+    });
+    return Object.keys(groups).sort().map(k => groups[k]);
+  }
+
+  const liabilities = grouped('LIABILITY');
+  const assets = grouped('ASSET');
+  const income = grouped('RECEIPT');
+  const expenditure = grouped('PAYMENT');
+
+  const sum = arr => arr.reduce((s, g) => s + g.subtotal, 0);
+
+  const totalIncome = sum(income);
+  const totalExpenditure = sum(expenditure);
+  const excess = totalIncome - totalExpenditure; // positive = surplus, negative = deficit
+
+  const totalLiabilitiesRaw = sum(liabilities);
+  const totalAssets = sum(assets);
+  const totalLiabilities = totalLiabilitiesRaw + excess;
+
+  return {
+    finYear: finYear,
+    liabilities: liabilities,
+    assets: assets,
+    income: income,
+    expenditure: expenditure,
+    totalLiabilitiesRaw: totalLiabilitiesRaw,
+    excess: excess,
+    totalLiabilities: totalLiabilities,
+    totalAssets: totalAssets,
+    balanced: Math.abs(totalLiabilities - totalAssets) < 0.01,
+    totalIncome: totalIncome,
+    totalExpenditure: totalExpenditure
+  };
 }

@@ -34,12 +34,40 @@ acno | bsie | type | acname | fullacname
 Whenever you edit `Code.gs` later: **Deploy > Manage deployments > ✎ Edit > New version > Deploy**
 (the same `/exec` URL keeps working — no need to update the forms).
 
-## 3. Configure and host the forms
-1. Open `JournalForm.html` and `AccountsForm.html`.
-2. Replace `PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE` with the `/exec` URL from step 2.
-3. Push both files to a GitHub repo, enable **GitHub Pages** (Settings > Pages > deploy from branch).
+## 3. Configure and host the pages
+1. Open `JournalForm.html`, `AccountsForm.html`, `Ledger.html`, `Bsie.html`.
+2. In each, replace `PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE` with the `/exec` URL from step 2.
+3. Push all four files to a GitHub repo, enable **GitHub Pages** (Settings > Pages > deploy from branch).
 4. Share the resulting URLs (e.g. `https://yourname.github.io/repo/JournalForm.html`)
-   with whoever needs to enter data.
+   with whoever needs to enter data or view reports.
+
+## Pages
+| File | Purpose |
+|---|---|
+| `JournalForm.html` | Add a Journal entry |
+| `AccountsForm.html` | Add a new Account |
+| `Ledger.html` | Per-account transaction history + running balance for a chosen FY |
+| `Bsie.html` | Balance Sheet + Income & Expenditure for a chosen FY |
+
+## How Ledger/BSIE are computed
+- Both are scoped to a **selected Financial Year**, filtering the continuous
+  Journal sheet by its `finYear` column — this reproduces exactly what your old
+  per-year files showed, since the opening-balance ("B/F FROM LAST BS") entry is
+  itself a Journal row dated at the start of each FY.
+- **Sign convention** (matches your existing data): Asset & Payment(expenditure)
+  accounts are debit-normal (`Debits − Credits`); Liability & Receipt(income)
+  accounts are credit-normal (`Credits − Debits`).
+- **BSIE grouping**: accounts sharing the same `bsie` code (e.g. your three bank
+  accounts under `1-04`) are listed individually with a subtotal under that code
+  — there's no separate "group label" field in the Accounts sheet, so the code
+  itself is shown as the heading. Say the word if you'd rather add a small
+  reference table mapping BSIE codes to descriptive labels.
+- **Balance check**: `Bsie.html` shows a green "Assets = Liabilities" badge, or a
+  red mismatch amount — a useful sanity check that catches mis-typed account
+  types or bsie codes.
+- The `excess`/`Excess of Income over Expenditure` line is a computed plug
+  (Income − Expenditure for the year), not a journal-posted figure — same as
+  your original BSIE sheet.
 
 ## Notes / current assumptions
 - **finYear** format is `"2025-26"` (Jul–Jun), auto-detected from the latest finYear
