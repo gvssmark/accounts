@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 13px; padding: 8px 16px; }
+    label { display: block; margin-top: 12px; font-weight: bold; }
+    input, select, textarea {
+      width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box;
+      font-size: 13px; border: 1px solid #ccc; border-radius: 4px;
+    }
+    .row { display: flex; gap: 12px; }
+    .row > div { flex: 1; }
+    .hint { color: #666; font-size: 11px; margin-top: 3px; }
+    .readonly { background: #f3f3f3; }
+    button {
+      margin-top: 18px; padding: 8px 16px; font-size: 13px; border: none;
+      border-radius: 4px; background: #1a73e8; color: white; cursor: pointer;
+    }
+    button:disabled { background: #999; cursor: default; }
+    #error { color: #c00; margin-top: 10px; white-space: pre-wrap; }
+    #success { color: #0a7a2f; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <div>
+      <label>Financial Year</label>
+      <input id="finYear" class="readonly" readonly>
+      <div class="hint" id="fyHint"></div>
+    </div>
+    <div>
+      <label>Journal No.</label>
+      <input id="jrnlNo" class="readonly" readonly>
+    </div>
+  </div>
+
+  <label>Date</label>
+  <input type="date" id="date">
+
+  <div class="row">
+    <div>
+      <label>Debit Account</label>
+      <select id="drAccount"><option value="">Loading…</option></select>
+    </div>
+    <div>
+      <label>Credit Account</label>
+      <select id="crAccount"><option value="">Loading…</option></select>
+    </div>
+  </div>
+
+  <label>Details of Transaction</label>
+  <textarea id="details" rows="2"></textarea>
+
+  <label>Amount</label>
+  <input type="number" id="amount" min="0" step="0.01">
+
+  <button id="submitBtn" onclick="submitEntry()">Add Journal Entry</button>
+  <div id="error"></div>
+  <div id="success"></div>
+
+  <script>
+    function init(data) {
+      document.getElementById('finYear').value = data.finYear;
+      document.getElementById('fyHint').innerText = data.finYearStart + ' to ' + data.finYearEnd;
+      document.getElementById('jrnlNo').value = data.nextJrnlNo;
+      document.getElementById('date').min = data.finYearStart;
+      document.getElementById('date').max = data.finYearEnd;
+
+      const dr = document.getElementById('drAccount');
+      const cr = document.getElementById('crAccount');
+      dr.innerHTML = '<option value="">Select…</option>';
+      cr.innerHTML = '<option value="">Select…</option>';
+      data.accounts.forEach(a => {
+        dr.innerHTML += '<option value="' + a + '">' + a + '</option>';
+        cr.innerHTML += '<option value="' + a + '">' + a + '</option>';
+      });
+    }
+
+    google.script.run.withSuccessHandler(init).withFailureHandler(showError).getJournalFormData();
+
+    function showError(err) {
+      document.getElementById('error').innerText = err.message || err;
+      document.getElementById('submitBtn').disabled = false;
+    }
+
+    function submitEntry() {
+      document.getElementById('error').innerText = '';
+      document.getElementById('success').innerText = '';
+      document.getElementById('submitBtn').disabled = true;
+
+      const entry = {
+        date: document.getElementById('date').value,
+        finYear: document.getElementById('finYear').value,
+        drAccount: document.getElementById('drAccount').value,
+        crAccount: document.getElementById('crAccount').value,
+        details: document.getElementById('details').value,
+        amount: document.getElementById('amount').value
+      };
+
+      if (!entry.date) { showError('Please select a date'); return; }
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          document.getElementById('success').innerText = 'Saved as Journal No. ' + res.jrnlNo;
+          document.getElementById('details').value = '';
+          document.getElementById('amount').value = '';
+          google.script.run.withSuccessHandler(init).getJournalFormData();
+          document.getElementById('submitBtn').disabled = false;
+        })
+        .withFailureHandler(showError)
+        .submitJournalEntry(entry);
+    }
+  </script>
+</body>
+</html>

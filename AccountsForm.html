@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <style>
+    body { font-family: Arial, sans-serif; font-size: 13px; padding: 8px 16px; }
+    label { display: block; margin-top: 12px; font-weight: bold; }
+    input, select {
+      width: 100%; padding: 6px; margin-top: 4px; box-sizing: border-box;
+      font-size: 13px; border: 1px solid #ccc; border-radius: 4px;
+    }
+    .row { display: flex; gap: 12px; }
+    .row > div { flex: 1; }
+    .hint { color: #666; font-size: 11px; margin-top: 3px; }
+    .preview { margin-top: 14px; padding: 8px; background: #f3f3f3; border-radius: 4px; font-size: 13px; }
+    button {
+      margin-top: 18px; padding: 8px 16px; font-size: 13px; border: none;
+      border-radius: 4px; background: #1a73e8; color: white; cursor: pointer;
+    }
+    button:disabled { background: #999; cursor: default; }
+    #error { color: #c00; margin-top: 10px; white-space: pre-wrap; }
+    #success { color: #0a7a2f; margin-top: 10px; }
+  </style>
+</head>
+<body>
+  <label>Account Type</label>
+  <select id="type" onchange="onTypeChange()"><option value="">Loading…</option></select>
+
+  <div class="row">
+    <div>
+      <label>Account No.</label>
+      <input id="acno" maxlength="4" oninput="updatePreview()">
+      <div class="hint">4 digits — auto-suggested, editable</div>
+    </div>
+    <div>
+      <label>Map to BSIE</label>
+      <input id="bsie" placeholder="e.g. 1-09">
+    </div>
+  </div>
+
+  <label>Account Name</label>
+  <input id="acname" oninput="updatePreview()">
+
+  <div class="preview" id="preview">Full account name will appear here</div>
+
+  <button id="submitBtn" onclick="submitEntry()">Add Account</button>
+  <div id="error"></div>
+  <div id="success"></div>
+
+  <script>
+    function init(data) {
+      const typeSel = document.getElementById('type');
+      typeSel.innerHTML = '<option value="">Select…</option>';
+      data.types.forEach(t => {
+        typeSel.innerHTML += '<option value="' + t + '">' + t + '</option>';
+      });
+    }
+
+    google.script.run.withSuccessHandler(init).withFailureHandler(showError).getAccountsFormData();
+
+    function onTypeChange() {
+      const type = document.getElementById('type').value;
+      if (!type) return;
+      google.script.run
+        .withSuccessHandler(function(acno) {
+          document.getElementById('acno').value = acno;
+          updatePreview();
+        })
+        .withFailureHandler(showError)
+        .getNextAcno(type);
+    }
+
+    function updatePreview() {
+      const acno = document.getElementById('acno').value.trim();
+      const name = document.getElementById('acname').value.trim();
+      document.getElementById('preview').innerText =
+        (acno && name) ? (acno + '-' + name) : 'Full account name will appear here';
+    }
+
+    function showError(err) {
+      document.getElementById('error').innerText = err.message || err;
+      document.getElementById('submitBtn').disabled = false;
+    }
+
+    function submitEntry() {
+      document.getElementById('error').innerText = '';
+      document.getElementById('success').innerText = '';
+      document.getElementById('submitBtn').disabled = true;
+
+      const entry = {
+        acno: document.getElementById('acno').value.trim(),
+        bsie: document.getElementById('bsie').value.trim(),
+        type: document.getElementById('type').value,
+        acname: document.getElementById('acname').value.trim()
+      };
+
+      google.script.run
+        .withSuccessHandler(function(res) {
+          document.getElementById('success').innerText = 'Saved: ' + res.fullacname;
+          document.getElementById('acname').value = '';
+          document.getElementById('bsie').value = '';
+          document.getElementById('preview').innerText = 'Full account name will appear here';
+          document.getElementById('submitBtn').disabled = false;
+        })
+        .withFailureHandler(showError)
+        .submitAccountEntry(entry);
+    }
+  </script>
+</body>
+</html>
