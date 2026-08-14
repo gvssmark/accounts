@@ -91,35 +91,6 @@
   .cols { display: flex; gap: 20px; flex-wrap: wrap; }
   .cols > .col { flex: 1; min-width: 280px; }
 
-  /* report headings */
-  .org-heading-bar {
-    background: #111; color: #fff; text-align: center; font-weight: bold; font-size: 16px;
-    padding: 8px; margin-bottom: 10px; border-radius: 4px;
-  }
-  .report-subheading { text-align: center; font-weight: bold; font-size: 13px; margin-bottom: 14px; color: #333; }
-  .section-title-bar {
-    background: #111; color: #fff; text-align: center; font-weight: bold; font-size: 13px;
-    padding: 5px; margin: 16px 0 0; border-radius: 3px 3px 0 0;
-  }
-
-  /* side-by-side BSIE statement table */
-  table.bsie-table { width: 100%; border-collapse: collapse; border: 1px solid #333; margin-bottom: 4px; }
-  table.bsie-table th, table.bsie-table td { padding: 5px 7px; font-size: 12px; border-bottom: 1px solid #eee; }
-  table.bsie-table th { background: #f2f2f2; text-align: left; font-size: 11px; text-transform: uppercase; color: #555; }
-  table.bsie-table td.ac-col, table.bsie-table th.ac-col { width: 40px; color: #555; }
-  table.bsie-table td:nth-child(3), table.bsie-table th:nth-child(3),
-  table.bsie-table td:nth-child(6), table.bsie-table th:nth-child(6) { text-align: right; }
-  table.bsie-table .divider { border-left: 2px solid #333; }
-  table.bsie-table .group-label td { font-weight: bold; }
-  table.bsie-table .subtotal td { font-weight: bold; border-top: 1px solid #999; }
-  table.bsie-table .grand-total td { font-weight: bold; font-size: 13px; color: #b3261e; border-top: 2px solid #333; background: #f7f7f7; }
-
-  /* signatories */
-  .signatories { display: flex; justify-content: space-between; margin-top: 46px; gap: 10px; }
-  .signatories .sig { flex: 1; text-align: center; }
-  .signatories .sig-line { border-top: 1px solid #333; margin: 34px 8px 6px; }
-  .signatories .sig-label { font-weight: bold; font-size: 12px; }
-
   .report-toolbar { display: flex; gap: 10px; align-items: flex-end; flex-wrap: wrap; margin-bottom: 14px; }
   .report-toolbar > div { min-width: 160px; }
 
@@ -131,8 +102,6 @@
     table.report.stack td { text-align: right; display: flex; justify-content: space-between; padding: 3px 4px; border: none; }
     table.report.stack td::before { content: attr(data-label); font-weight: bold; text-align: left; color: #555; }
     .cols { flex-direction: column; }
-    table.bsie-table { font-size: 11px; }
-    table.bsie-table .divider { border-left: none; border-top: 2px solid #333; }
   }
 
   /* print */
@@ -142,25 +111,19 @@
     body { background: #fff; font-size: 12px; }
     main { max-width: none; padding: 0; margin: 0; }
     .card { border: none; padding: 0; box-shadow: none; }
-    @page { size: A4; margin: 16mm 12mm 14mm; }
+    @page { size: A4; margin: 22mm 14mm 16mm; }
     .print-header {
-      display: flex; justify-content: space-between; position: fixed; top: -11mm; left: 0; right: 0;
-      font-size: 10px; color: #555; border-bottom: 1px solid #999; padding-bottom: 3px;
+      display: block; position: fixed; top: -14mm; left: 0; right: 0;
+      text-align: center; border-bottom: 1px solid #333; padding-bottom: 4px; margin-bottom: 8px;
     }
+    .print-header .org { font-weight: bold; font-size: 15px; }
+    .print-header .rep { font-size: 12px; color: #333; }
     table.report.stack thead { display: table-header-group; }
     table.report.stack, table.report.stack tbody, table.report.stack tr, table.report.stack td { display: revert; width: revert; }
     table.report.stack td { text-align: right; }
     table.report.stack td:first-child, table.report.stack td:nth-child(2) { text-align: left; }
     table.report.stack td::before { content: none; }
     .cols { display: flex; flex-direction: row; }
-
-    /* keep BSIE compact so it fits one A4 page */
-    #bsieReportArea .org-heading-bar { font-size: 14px; padding: 5px; margin-bottom: 6px; }
-    #bsieReportArea .section-title-bar { font-size: 11px; padding: 4px; margin-top: 10px; }
-    #bsieReportArea table.bsie-table th, #bsieReportArea table.bsie-table td { padding: 2px 6px; font-size: 10px; }
-    #bsieReportArea .signatories { margin-top: 26px; }
-    #bsieReportArea .signatories .sig-line { margin: 20px 8px 4px; }
-    #bsieReportArea { page-break-inside: avoid; }
   }
 
   #toast {
@@ -194,8 +157,8 @@
 </nav>
 
 <div class="print-header" id="printHeader">
-  <span id="printHeaderSub"></span>
-  <span id="printHeaderDate"></span>
+  <div class="org">Indian Bank Retirees' Association</div>
+  <div class="rep" id="printHeaderSub"></div>
 </div>
 
 <main id="app"></main>
@@ -206,7 +169,6 @@
 // Configure this
 // ==========================================================================
 const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycby5nDN-T4n6ivA7N7wL5_K-7ouB-lEaZ7TGrF30wsDZnxZAQeI-6Y5wIjyQPrIyVz_O9Q/exec';
-
 // ==========================================================================
 
 const state = { finYears: [], accounts: [], bsieCodes: [] };
@@ -232,31 +194,14 @@ const ROUTES = {
   close: renderClose
 };
 
-function parseHash_() {
-  const raw = (location.hash || '#about').slice(1);
-  const qIdx = raw.indexOf('?');
-  if (qIdx === -1) return { route: raw, params: {} };
-  const route = raw.slice(0, qIdx);
-  const params = {};
-  raw.slice(qIdx + 1).split('&').forEach(pair => {
-    if (!pair) return;
-    const eq = pair.indexOf('=');
-    const k = decodeURIComponent(eq === -1 ? pair : pair.slice(0, eq));
-    const v = eq === -1 ? '' : decodeURIComponent(pair.slice(eq + 1));
-    params[k] = v;
-  });
-  return { route: route, params: params };
-}
-
 function router() {
   closeNav();
-  const { route, params } = parseHash_();
+  const route = (location.hash || '#about').slice(1);
   const fn = ROUTES[route] || renderAbout;
   document.querySelectorAll('#sideNav a').forEach(a => a.classList.toggle('active', a.dataset.route === route));
   document.getElementById('app').innerHTML = '<div class="card">Loading…</div>';
   document.getElementById('printHeaderSub').innerText = '';
-  document.getElementById('printHeaderDate').innerText = new Date().toLocaleDateString('en-GB');
-  fn(params);
+  fn();
 }
 window.addEventListener('hashchange', router);
 
@@ -485,7 +430,7 @@ function submitAccount() {
 // ---------------------------------------------------------------------
 // BSIE Reports
 // ---------------------------------------------------------------------
-function renderBsie(params) {
+function renderBsie() {
   getFinYears().then(fys => {
     document.getElementById('app').innerHTML =
       '<div class="card no-print">' +
@@ -494,89 +439,66 @@ function renderBsie(params) {
         '<div><label>Financial Year</label><select id="b_fy" onchange="loadBsie()">' +
           fys.map(fy => '<option value="' + fy + '">' + fy + '</option>').join('') + '</select></div>' +
         '<div><button class="btn secondary" onclick="window.print()">Print (A4)</button></div>' +
-        '<div><button class="btn secondary" onclick="shareWhatsApp(\'bsie\',\'BSIE\')">Share via WhatsApp</button></div>' +
+        '<div><button class="btn secondary" onclick="emailReport(\'bsieReportArea\', document.getElementById(\'b_fy\').value, \'BSIE\')">Email</button></div>' +
       '</div></div>' +
       '<div id="bsieReportArea"></div>';
-    const fy = (params && params.fy && fys.includes(params.fy)) ? params.fy : (fys[fys.length - 1] || '');
-    document.getElementById('b_fy').value = fy;
+    document.getElementById('b_fy').value = fys[fys.length - 1] || '';
     loadBsie();
   }).catch(err => showError('app', err));
 }
 function loadBsie() {
   const fy = document.getElementById('b_fy').value;
-  document.getElementById('printHeaderSub').innerText = fy + ' BS-IE';
+  document.getElementById('printHeaderSub').innerText = 'Balance Sheet & Income / Expenditure — FY ' + fy;
   apiGet('bsie', { finYear: fy }).then(renderBsieData).catch(err => showError('bsieReportArea', err));
 }
-
-/** Flattens BSIE groups into rows: {ac, label, amount, cls} for the side-by-side statement table. */
-function flattenBsieGroups_(groups) {
-  const rows = [];
-  groups.forEach(g => {
+function bsieGroupRows(groups) {
+  return groups.map(g => {
     if (g.lines.length <= 1) {
-      rows.push({ ac: g.mapping, label: g.label, amount: g.subtotal, cls: '' });
-    } else {
-      rows.push({ ac: g.mapping, label: g.label, amount: '', cls: 'group-label' });
-      g.lines.forEach(l => rows.push({ ac: '', label: '\u2003' + l.acno + '-' + l.acname, amount: l.balance, cls: '' }));
-      rows.push({ ac: '', label: g.label + ' subtotal', amount: g.subtotal, cls: 'subtotal' });
+      return '<tr><td colspan="2" data-label="Item">' + escapeHtml(g.label) + '</td><td data-label="Amount">' + fmt(g.subtotal) + '</td></tr>';
     }
-  });
-  return rows;
-}
-/** One <table> with both sides so their Total rows land on the exact same <tr>. */
-function sideBySideTable_(leftHead, leftGroups, leftTotalLabel, leftTotal, rightHead, rightGroups, rightTotalLabel, rightTotal) {
-  const L = flattenBsieGroups_(leftGroups), R = flattenBsieGroups_(rightGroups);
-  const n = Math.max(L.length, R.length);
-  let body = '';
-  for (let i = 0; i < n; i++) {
-    const l = L[i] || { ac: '', label: '', amount: '', cls: '' };
-    const r = R[i] || { ac: '', label: '', amount: '', cls: '' };
-    body += '<tr>' +
-      '<td class="ac-col ' + l.cls + '" data-label="AC">' + escapeHtml(l.ac) + '</td>' +
-      '<td class="' + l.cls + '" data-label="Item">' + escapeHtml(l.label) + '</td>' +
-      '<td class="' + l.cls + '" data-label="Amount">' + (l.amount === '' ? '' : fmt(l.amount)) + '</td>' +
-      '<td class="ac-col divider ' + r.cls + '" data-label="AC">' + escapeHtml(r.ac) + '</td>' +
-      '<td class="' + r.cls + '" data-label="Item">' + escapeHtml(r.label) + '</td>' +
-      '<td class="' + r.cls + '" data-label="Amount">' + (r.amount === '' ? '' : fmt(r.amount)) + '</td>' +
-      '</tr>';
-  }
-  body += '<tr class="grand-total">' +
-    '<td colspan="2" data-label="Total">' + escapeHtml(leftTotalLabel) + '</td><td data-label="Amount">' + fmt(leftTotal) + '</td>' +
-    '<td colspan="2" class="divider" data-label="Total">' + escapeHtml(rightTotalLabel) + '</td><td data-label="Amount">' + fmt(rightTotal) + '</td>' +
-    '</tr>';
-  return '<div class="table-wrap"><table class="report stack bsie-table"><thead><tr>' +
-    '<th class="ac-col">AC</th><th>' + escapeHtml(leftHead) + '</th><th>Amount</th>' +
-    '<th class="ac-col divider">AC</th><th>' + escapeHtml(rightHead) + '</th><th>Amount</th>' +
-    '</tr></thead><tbody>' + body + '</tbody></table></div>';
-}
-function signatoriesBlock_() {
-  return '<div class="signatories">' +
-    ['President', 'General Secretary', 'Treasurer', 'Auditor'].map(role =>
-      '<div class="sig"><div class="sig-line"></div><div class="sig-label">' + role + '</div></div>'
-    ).join('') + '</div>';
+    const lines = g.lines.map(l =>
+      '<tr><td colspan="2" data-label="Item">&nbsp;&nbsp;' + escapeHtml(l.acno + '-' + l.acname) + '</td><td data-label="Amount">' + fmt(l.balance) + '</td></tr>'
+    ).join('');
+    return '<tr class="group-label"><td colspan="2" data-label="Item">' + escapeHtml(g.label) + '</td><td data-label="Amount"></td></tr>' +
+      lines +
+      '<tr class="subtotal"><td colspan="2" data-label="Subtotal">' + escapeHtml(g.label) + ' subtotal</td><td data-label="Amount">' + fmt(g.subtotal) + '</td></tr>';
+  }).join('');
 }
 function renderBsieData(d) {
-  const closingYear = '20' + d.finYear.split('-')[1];
   const badge = d.balanced
     ? '<span class="badge ok">Assets = Liabilities</span>'
     : '<span class="badge bad">Out of balance by ' + fmt(Math.abs(d.totalAssets - d.totalLiabilities)) + '</span>';
 
   const html =
-    '<div class="card" id="bsieCard">' +
-    '<div class="org-heading-bar">Indian Bank Retirees\' Association</div>' +
-    '<div class="no-print" style="text-align:center;margin-bottom:10px;">' + badge + '</div>' +
-    '<div class="section-title-bar">ASSETS AND LIABILITIES AS ON 30/06/' + closingYear + '</div>' +
-    sideBySideTable_('Liabilities', d.liabilities, 'Total', d.totalLiabilities, 'Assets', d.assets, 'Total', d.totalAssets) +
-    '<div class="section-title-bar">INCOME AND EXPENDITURE AS ON 30/06/' + closingYear + '</div>' +
-    sideBySideTable_('Expenditure', d.expenditure, 'Total', d.totalExpenditure, 'Income', d.income, 'Total', d.totalIncome) +
-    signatoriesBlock_() +
-    '</div>';
+    '<div class="card"><h3>Balance Sheet as on 30 Jun (FY ' + escapeHtml(d.finYear) + ')' + badge + '</h3>' +
+    '<div class="cols">' +
+      '<div class="col table-wrap"><table class="report stack"><thead><tr><th colspan="2">Liabilities</th><th>Amount</th></tr></thead><tbody>' +
+        bsieGroupRows(d.liabilities) +
+        '<tr class="grand-total"><td colspan="2" data-label="Total">Total</td><td data-label="Amount">' + fmt(d.totalLiabilities) + '</td></tr>' +
+      '</tbody></table></div>' +
+      '<div class="col table-wrap"><table class="report stack"><thead><tr><th colspan="2">Assets</th><th>Amount</th></tr></thead><tbody>' +
+        bsieGroupRows(d.assets) +
+        '<tr class="grand-total"><td colspan="2" data-label="Total">Total</td><td data-label="Amount">' + fmt(d.totalAssets) + '</td></tr>' +
+      '</tbody></table></div>' +
+    '</div></div>' +
+    '<div class="card"><h3>Income &amp; Expenditure for FY ' + escapeHtml(d.finYear) + '</h3>' +
+    '<div class="cols">' +
+      '<div class="col table-wrap"><table class="report stack"><thead><tr><th colspan="2">Expenditure</th><th>Amount</th></tr></thead><tbody>' +
+        bsieGroupRows(d.expenditure) +
+        '<tr class="grand-total"><td colspan="2" data-label="Total">Total</td><td data-label="Amount">' + fmt(d.totalExpenditure) + '</td></tr>' +
+      '</tbody></table></div>' +
+      '<div class="col table-wrap"><table class="report stack"><thead><tr><th colspan="2">Income</th><th>Amount</th></tr></thead><tbody>' +
+        bsieGroupRows(d.income) +
+        '<tr class="grand-total"><td colspan="2" data-label="Total">Total</td><td data-label="Amount">' + fmt(d.totalIncome) + '</td></tr>' +
+      '</tbody></table></div>' +
+    '</div></div>';
   document.getElementById('bsieReportArea').innerHTML = html;
 }
 
 // ---------------------------------------------------------------------
 // Ledger Reports
 // ---------------------------------------------------------------------
-function renderLedger(params) {
+function renderLedger() {
   Promise.all([getFinYears(), apiGet('journalForm')]).then(([fys, jf]) => {
     document.getElementById('app').innerHTML =
       '<div class="card no-print">' +
@@ -587,38 +509,25 @@ function renderLedger(params) {
         '<div><label>Account</label><select id="l_acc" onchange="loadLedger()"><option value="ALL">All Accounts</option>' +
           jf.accounts.map(a => '<option value="' + escapeHtml(a) + '">' + escapeHtml(a) + '</option>').join('') + '</select></div>' +
         '<div><button class="btn secondary" onclick="window.print()">Print (A4)</button></div>' +
-        '<div><button class="btn secondary" onclick="shareWhatsApp(\'ledger\',\'Ledger\')">Share via WhatsApp</button></div>' +
+        '<div><button class="btn secondary" onclick="emailReport(\'ledgerReportArea\', document.getElementById(\'l_fy\').value, \'Ledger\')">Email</button></div>' +
       '</div></div>' +
       '<div id="ledgerReportArea"></div>';
-    const fy = (params && params.fy && fys.includes(params.fy)) ? params.fy : (fys[fys.length - 1] || '');
-    document.getElementById('l_fy').value = fy;
-    if (params && params.acno && jf.accounts.includes(params.acno)) document.getElementById('l_acc').value = params.acno;
+    document.getElementById('l_fy').value = fys[fys.length - 1] || '';
     loadLedger();
   }).catch(err => showError('app', err));
 }
 function loadLedger() {
   const fy = document.getElementById('l_fy').value;
   const acc = document.getElementById('l_acc').value;
-  document.getElementById('printHeaderSub').innerText = fy + ' LEDGER';
+  document.getElementById('printHeaderSub').innerText = 'Ledger — FY ' + fy + (acc !== 'ALL' ? ' — ' + acc : '');
   apiGet('ledger', { finYear: fy, acno: acc }).then(renderLedgerData).catch(err => showError('ledgerReportArea', err));
 }
-function todayDdMmYyyy_() {
-  const d = new Date();
-  const p = n => String(n).padStart(2, '0');
-  return p(d.getDate()) + '-' + p(d.getMonth() + 1) + '-' + d.getFullYear();
-}
 function renderLedgerData(d) {
-  // Heading appears once, at the very top of normal document flow — so when printed
-  // it naturally shows on page 1 only; it is not part of the repeating fixed header.
-  const heading =
-    '<div class="org-heading-bar">Indian Bank Retirees\' Association</div>' +
-    '<div class="report-subheading">LEDGER AS ON ' + todayDdMmYyyy_() + '</div>';
-
   if (!d.accounts.length) {
-    document.getElementById('ledgerReportArea').innerHTML = '<div class="card">' + heading + '<p>No entries for this selection.</p></div>';
+    document.getElementById('ledgerReportArea').innerHTML = '<div class="card">No entries for this selection.</div>';
     return;
   }
-  const body = d.accounts.map(acc => {
+  const html = d.accounts.map(acc => {
     const rows = acc.entries.map(e =>
       '<tr>' +
       '<td data-label="Date">' + e.date + '</td>' +
@@ -629,12 +538,12 @@ function renderLedgerData(d) {
       '<td data-label="Balance">' + fmt(e.balance) + '</td>' +
       '</tr>'
     ).join('');
-    return '<div class="account-block">' +
+    return '<div class="card account-block">' +
       '<div class="account-header"><span>' + escapeHtml(acc.fullacname) + '</span><span>Closing: ' + fmt(acc.closingBalance) + '</span></div>' +
       '<div class="table-wrap"><table class="report stack"><thead><tr><th>Date</th><th>Jrnl No</th><th>Particulars</th>' +
       '<th>Debit</th><th>Credit</th><th>Balance</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
   }).join('');
-  document.getElementById('ledgerReportArea').innerHTML = '<div class="card">' + heading + body + signatoriesBlock_() + '</div>';
+  document.getElementById('ledgerReportArea').innerHTML = html;
 }
 
 // ---------------------------------------------------------------------
@@ -699,31 +608,19 @@ function confirmClose() {
 }
 
 // ---------------------------------------------------------------------
-// Share via WhatsApp
+// Email report
 // ---------------------------------------------------------------------
-function buildReportLink_(view) {
-  const base = location.origin + location.pathname;
-  let hash = '#' + view;
-  if (view === 'bsie') {
-    hash += '?fy=' + encodeURIComponent(document.getElementById('b_fy').value);
-  } else if (view === 'ledger') {
-    hash += '?fy=' + encodeURIComponent(document.getElementById('l_fy').value) +
-      '&acno=' + encodeURIComponent(document.getElementById('l_acc').value);
-  }
-  return base + hash;
-}
-function shareWhatsApp(view, kind) {
-  const finYear = view === 'bsie' ? document.getElementById('b_fy').value : document.getElementById('l_fy').value;
-  const link = buildReportLink_(view);
-  const text = "Indian Bank Retirees' Association — " + kind + ' (FY ' + finYear + ')\n' + link;
-
-  if (navigator.share) {
-    // Opens the OS share sheet; the person picks WhatsApp there, then picks the recipient inside WhatsApp.
-    navigator.share({ title: 'IBRA ' + kind, text: text }).catch(() => {});
-  } else {
-    // Desktop / unsupported browsers: opens WhatsApp Web/Desktop, where the person picks a chat to send to.
-    window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
-  }
+function emailReport(areaId, finYear, kind) {
+  const email = prompt('Send this report to which email address?');
+  if (!email) return;
+  const htmlBody =
+    '<div style="font-family:Arial,sans-serif;"><h2 style="margin-bottom:0;">Indian Bank Retirees\' Association</h2>' +
+    '<p style="margin-top:2px;color:#555;">' + escapeHtml(kind) + ' — FY ' + escapeHtml(finYear) + '</p>' +
+    document.getElementById(areaId).innerHTML + '</div>';
+  toast('Sending…');
+  apiPost({ action: 'email', toEmail: email, subject: 'IBRA ' + kind + ' — FY ' + finYear, htmlBody: htmlBody })
+    .then(() => toast('Report emailed to ' + email))
+    .catch(err => toast(err.message || err, true));
 }
 
 // ---------------------------------------------------------------------

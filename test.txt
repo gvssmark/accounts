@@ -1,1 +1,1 @@
-this is a test file
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycby5nDN-T4n6ivA7N7wL5_K-7ouB-lEaZ7TGrF30wsDZnxZAQeI-6Y5wIjyQPrIyVz_O9Q/exec';
