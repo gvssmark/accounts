@@ -8,8 +8,6 @@
 <meta name="theme-color" content="#1a73e8">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon.svg">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
 <style>
   :root { --brand: #1a73e8; --brand-dark: #0d47a1; --bg: #f5f6f8; --border: #e0e0e0; }
   * { box-sizing: border-box; }
@@ -136,24 +134,6 @@
     table.bsie-table { font-size: 11px; }
     table.bsie-table .divider { border-left: none; border-top: 2px solid #333; }
   }
-
-  /* pdf-export mode: mirrors @media print rules, applied via a body class while
-     html2canvas captures the report (html2canvas does not apply @media print). */
-  body.pdf-export header.topbar, body.pdf-export #sideNav, body.pdf-export #navOverlay, body.pdf-export .no-print { display: none !important; }
-  body.pdf-export main { max-width: none; padding: 0; margin: 0; }
-  body.pdf-export .card { border: none; padding: 0; box-shadow: none; }
-  body.pdf-export table.report.stack thead { display: table-header-group; }
-  body.pdf-export table.report.stack, body.pdf-export table.report.stack tbody,
-  body.pdf-export table.report.stack tr, body.pdf-export table.report.stack td { display: revert; width: revert; }
-  body.pdf-export table.report.stack td { text-align: right; }
-  body.pdf-export table.report.stack td:first-child, body.pdf-export table.report.stack td:nth-child(2) { text-align: left; }
-  body.pdf-export table.report.stack td::before { content: none; }
-  body.pdf-export .cols { display: flex; flex-direction: row; }
-  body.pdf-export #bsieReportArea .org-heading-bar { font-size: 14px; padding: 5px; margin-bottom: 6px; }
-  body.pdf-export #bsieReportArea .section-title-bar { font-size: 11px; padding: 4px; margin-top: 10px; }
-  body.pdf-export #bsieReportArea table.bsie-table th, body.pdf-export #bsieReportArea table.bsie-table td { padding: 2px 6px; font-size: 10px; }
-  body.pdf-export #bsieReportArea .signatories { margin-top: 26px; }
-  body.pdf-export #bsieReportArea .signatories .sig-line { margin: 20px 8px 4px; }
 
   /* print */
   .print-header { display: none; }
@@ -513,8 +493,8 @@ function renderBsie(params) {
       '<div class="report-toolbar">' +
         '<div><label>Financial Year</label><select id="b_fy" onchange="loadBsie()">' +
           fys.map(fy => '<option value="' + fy + '">' + fy + '</option>').join('') + '</select></div>' +
-        '<div><button class="btn secondary" onclick="savePdf(\'bsie\',\'BSIE\')">Save PDF (A4)</button></div>' +
-        (canShareFiles_() ? '<div><button class="btn secondary" onclick="shareWhatsAppPdf(\'bsie\',\'BSIE\')">Share via WhatsApp</button></div>' : '') +
+        '<div><button class="btn secondary" onclick="window.print()">Print (A4)</button></div>' +
+        '<div><button class="btn secondary" onclick="shareWhatsApp(\'bsie\',\'BSIE\')">Share via WhatsApp</button></div>' +
       '</div></div>' +
       '<div id="bsieReportArea"></div>';
     const fy = (params && params.fy && fys.includes(params.fy)) ? params.fy : (fys[fys.length - 1] || '');
@@ -606,8 +586,8 @@ function renderLedger(params) {
           fys.map(fy => '<option value="' + fy + '">' + fy + '</option>').join('') + '</select></div>' +
         '<div><label>Account</label><select id="l_acc" onchange="loadLedger()"><option value="ALL">All Accounts</option>' +
           jf.accounts.map(a => '<option value="' + escapeHtml(a) + '">' + escapeHtml(a) + '</option>').join('') + '</select></div>' +
-        '<div><button class="btn secondary" onclick="savePdf(\'ledger\',\'Ledger\')">Save PDF (A4)</button></div>' +
-        (canShareFiles_() ? '<div><button class="btn secondary" onclick="shareWhatsAppPdf(\'ledger\',\'Ledger\')">Share via WhatsApp</button></div>' : '') +
+        '<div><button class="btn secondary" onclick="window.print()">Print (A4)</button></div>' +
+        '<div><button class="btn secondary" onclick="shareWhatsApp(\'ledger\',\'Ledger\')">Share via WhatsApp</button></div>' +
       '</div></div>' +
       '<div id="ledgerReportArea"></div>';
     const fy = (params && params.fy && fys.includes(params.fy)) ? params.fy : (fys[fys.length - 1] || '');
@@ -715,69 +695,31 @@ function confirmClose() {
 }
 
 // ---------------------------------------------------------------------
-// PDF generation + Share / Save
+// Share via WhatsApp
 // ---------------------------------------------------------------------
-function canShareFiles_() {
-  try {
-    return !!(navigator.canShare && navigator.share &&
-      navigator.canShare({ files: [new File(['x'], 't.pdf', { type: 'application/pdf' })] }));
-  } catch (e) { return false; }
+function buildReportLink_(view) {
+  const base = location.origin + location.pathname;
+  let hash = '#' + view;
+  if (view === 'bsie') {
+    hash += '?fy=' + encodeURIComponent(document.getElementById('b_fy').value);
+  } else if (view === 'ledger') {
+    hash += '?fy=' + encodeURIComponent(document.getElementById('l_fy').value) +
+      '&acno=' + encodeURIComponent(document.getElementById('l_acc').value);
+  }
+  return base + hash;
 }
+function shareWhatsApp(view, kind) {
+  const finYear = view === 'bsie' ? document.getElementById('b_fy').value : document.getElementById('l_fy').value;
+  const link = buildReportLink_(view);
+  const text = "Indian Bank Retirees' Association — " + kind + ' (FY ' + finYear + ')\n' + link;
 
-function reportElementId_(view) { return view === 'bsie' ? 'bsieReportArea' : 'ledgerReportArea'; }
-function currentFinYear_(view) {
-  return view === 'bsie' ? document.getElementById('b_fy').value : document.getElementById('l_fy').value;
-}
-function pdfFilename_(view, kind) {
-  return 'IBRA_' + kind.replace(/\s+/g, '') + '_' + currentFinYear_(view) + '.pdf';
-}
-
-/** Renders a report container to a PDF Blob (A4), using pdf-export CSS mode so it looks like the print layout. */
-function makePdfBlob_(view) {
-  const el = document.getElementById(reportElementId_(view));
-  document.body.classList.add('pdf-export');
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF('p', 'mm', 'a4');
-  return new Promise((resolve, reject) => {
-    doc.html(el, {
-      x: 8, y: 8, width: 194, windowWidth: 900,
-      html2canvas: { scale: 2, useCORS: true },
-      callback: function (finishedDoc) {
-        document.body.classList.remove('pdf-export');
-        try { resolve(finishedDoc.output('blob')); } catch (e) { reject(e); }
-      }
-    });
-  }).catch(err => { document.body.classList.remove('pdf-export'); throw err; });
-}
-
-function downloadBlob_(blob, filename) {
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url; a.download = filename;
-  document.body.appendChild(a); a.click(); document.body.removeChild(a);
-  setTimeout(() => URL.revokeObjectURL(url), 4000);
-}
-
-function savePdf(view, kind) {
-  toast('Preparing PDF…');
-  makePdfBlob_(view)
-    .then(blob => { downloadBlob_(blob, pdfFilename_(view, kind)); toast('PDF saved to your device.'); })
-    .catch(err => toast('Could not generate PDF: ' + (err.message || err), true));
-}
-
-function shareWhatsAppPdf(view, kind) {
-  toast('Preparing PDF…');
-  makePdfBlob_(view).then(blob => {
-    const filename = pdfFilename_(view, kind);
-    const file = new File([blob], filename, { type: 'application/pdf' });
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      // Opens the OS share sheet with the PDF genuinely attached; picking WhatsApp there lets the
-      // person choose the recipient inside WhatsApp with the file already attached.
-      return navigator.share({ files: [file], title: 'IBRA ' + kind, text: 'IBRA ' + kind + ' — FY ' + currentFinYear_(view) }).catch(() => {});
-    }
-    downloadBlob_(blob, filename);
-    toast('WhatsApp attach not supported here — PDF saved instead.');
-  }).catch(err => toast('Could not generate PDF: ' + (err.message || err), true));
+  if (navigator.share) {
+    // Opens the OS share sheet; the person picks WhatsApp there, then picks the recipient inside WhatsApp.
+    navigator.share({ title: 'IBRA ' + kind, text: text }).catch(() => {});
+  } else {
+    // Desktop / unsupported browsers: opens WhatsApp Web/Desktop, where the person picks a chat to send to.
+    window.open('https://wa.me/?text=' + encodeURIComponent(text), '_blank');
+  }
 }
 
 // ---------------------------------------------------------------------
