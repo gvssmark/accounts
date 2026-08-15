@@ -8,8 +8,8 @@
 <meta name="theme-color" content="#1a73e8">
 <link rel="icon" href="icon.svg" type="image/svg+xml">
 <link rel="apple-touch-icon" href="icon.svg">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.8.2/jspdf.plugin.autotable.min.js"></script>
 <style>
   :root { --brand: #1a73e8; --brand-dark: #0d47a1; --bg: #f5f6f8; --border: #e0e0e0; }
   * { box-sizing: border-box; }
@@ -105,32 +105,16 @@
   }
 
   /* side-by-side BSIE statement table */
-  table.bsie-table { width: 100%; border-collapse: collapse; border: 1px solid #333; margin-bottom: 4px; table-layout: fixed; }
-  table.bsie-table th, table.bsie-table td {
-    padding: 5px 7px; font-size: 12px; border-bottom: 1px solid #eee;
-    overflow-wrap: break-word; word-break: break-word; white-space: normal;
-  }
+  table.bsie-table { width: 100%; border-collapse: collapse; border: 1px solid #333; margin-bottom: 4px; }
+  table.bsie-table th, table.bsie-table td { padding: 5px 7px; font-size: 12px; border-bottom: 1px solid #eee; }
   table.bsie-table th { background: #f2f2f2; text-align: left; font-size: 11px; text-transform: uppercase; color: #555; }
-  table.bsie-table th:nth-child(1), table.bsie-table td:nth-child(1),
-  table.bsie-table th:nth-child(4), table.bsie-table td:nth-child(4) { width: 8%; color: #555; }
-  table.bsie-table th:nth-child(2), table.bsie-table td:nth-child(2),
-  table.bsie-table th:nth-child(5), table.bsie-table td:nth-child(5) { width: 32%; }
-  table.bsie-table th:nth-child(3), table.bsie-table td:nth-child(3),
-  table.bsie-table th:nth-child(6), table.bsie-table td:nth-child(6) { width: 10%; text-align: right; }
+  table.bsie-table td.ac-col, table.bsie-table th.ac-col { width: 40px; color: #555; }
+  table.bsie-table td:nth-child(3), table.bsie-table th:nth-child(3),
+  table.bsie-table td:nth-child(6), table.bsie-table th:nth-child(6) { text-align: right; }
   table.bsie-table .divider { border-left: 2px solid #333; }
   table.bsie-table .group-label td { font-weight: bold; }
   table.bsie-table .subtotal td { font-weight: bold; border-top: 1px solid #999; }
   table.bsie-table .grand-total td { font-weight: bold; font-size: 13px; color: #b3261e; border-top: 2px solid #333; background: #f7f7f7; }
-
-  /* Ledger / plain report tables: force wrap on the Particulars column so it never overflows */
-  table.report:not(.bsie-table) { table-layout: fixed; width: 100%; }
-  table.report:not(.bsie-table) th, table.report:not(.bsie-table) td { overflow-wrap: break-word; word-break: break-word; white-space: normal; }
-  table.report:not(.bsie-table) th:nth-child(1), table.report:not(.bsie-table) td:nth-child(1) { width: 12%; }
-  table.report:not(.bsie-table) th:nth-child(2), table.report:not(.bsie-table) td:nth-child(2) { width: 9%; }
-  table.report:not(.bsie-table) th:nth-child(3), table.report:not(.bsie-table) td:nth-child(3) { width: 39%; text-align: left; }
-  table.report:not(.bsie-table) th:nth-child(4), table.report:not(.bsie-table) td:nth-child(4),
-  table.report:not(.bsie-table) th:nth-child(5), table.report:not(.bsie-table) td:nth-child(5),
-  table.report:not(.bsie-table) th:nth-child(6), table.report:not(.bsie-table) td:nth-child(6) { width: 13.33%; }
 
   /* signatories */
   .signatories { display: flex; justify-content: space-between; margin-top: 46px; gap: 10px; }
@@ -144,7 +128,7 @@
   /* mobile stacked tables for reports (screen only) */
   @media (max-width: 620px) {
     table.report.stack thead { display: none; }
-    table.report.stack, table.report.stack tbody, table.report.stack tr, table.report.stack td { display: block; width: 100% !important; }
+    table.report.stack, table.report.stack tbody, table.report.stack tr, table.report.stack td { display: block; width: 100%; }
     table.report.stack tr { border-bottom: 1px solid var(--border); padding: 6px 0; }
     table.report.stack td { text-align: right; display: flex; justify-content: space-between; padding: 3px 4px; border: none; }
     table.report.stack td::before { content: attr(data-label); font-weight: bold; text-align: left; color: #555; }
@@ -152,6 +136,24 @@
     table.bsie-table { font-size: 11px; }
     table.bsie-table .divider { border-left: none; border-top: 2px solid #333; }
   }
+
+  /* pdf-export mode: mirrors @media print rules, applied via a body class while
+     html2canvas captures the report (html2canvas does not apply @media print). */
+  body.pdf-export header.topbar, body.pdf-export #sideNav, body.pdf-export #navOverlay, body.pdf-export .no-print { display: none !important; }
+  body.pdf-export main { max-width: none; padding: 0; margin: 0; }
+  body.pdf-export .card { border: none; padding: 0; box-shadow: none; }
+  body.pdf-export table.report.stack thead { display: table-header-group; }
+  body.pdf-export table.report.stack, body.pdf-export table.report.stack tbody,
+  body.pdf-export table.report.stack tr, body.pdf-export table.report.stack td { display: revert; width: revert; }
+  body.pdf-export table.report.stack td { text-align: right; }
+  body.pdf-export table.report.stack td:first-child, body.pdf-export table.report.stack td:nth-child(2) { text-align: left; }
+  body.pdf-export table.report.stack td::before { content: none; }
+  body.pdf-export .cols { display: flex; flex-direction: row; }
+  body.pdf-export #bsieReportArea .org-heading-bar { font-size: 14px; padding: 5px; margin-bottom: 6px; }
+  body.pdf-export #bsieReportArea .section-title-bar { font-size: 11px; padding: 4px; margin-top: 10px; }
+  body.pdf-export #bsieReportArea table.bsie-table th, body.pdf-export #bsieReportArea table.bsie-table td { padding: 2px 6px; font-size: 10px; }
+  body.pdf-export #bsieReportArea .signatories { margin-top: 26px; }
+  body.pdf-export #bsieReportArea .signatories .sig-line { margin: 20px 8px 4px; }
 
   /* print */
   .print-header { display: none; }
@@ -227,7 +229,7 @@ const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycby5nDN-T4n6ivA7N7wL
 
 // ==========================================================================
 
-const state = { finYears: [], accounts: [], bsieCodes: [], lastBsie: null, lastLedger: null };
+const state = { finYears: [], accounts: [], bsieCodes: [] };
 
 // ---------------------------------------------------------------------
 // Nav / routing
@@ -523,7 +525,7 @@ function renderBsie(params) {
 function loadBsie() {
   const fy = document.getElementById('b_fy').value;
   document.getElementById('printHeaderSub').innerText = fy + ' BS-IE';
-  apiGet('bsie', { finYear: fy }).then(d => { state.lastBsie = d; renderBsieData(d); }).catch(err => showError('bsieReportArea', err));
+  apiGet('bsie', { finYear: fy }).then(renderBsieData).catch(err => showError('bsieReportArea', err));
 }
 
 /** Flattens BSIE groups into rows: {ac, label, amount, cls} for the side-by-side statement table. */
@@ -618,7 +620,7 @@ function loadLedger() {
   const fy = document.getElementById('l_fy').value;
   const acc = document.getElementById('l_acc').value;
   document.getElementById('printHeaderSub').innerText = fy + ' LEDGER';
-  apiGet('ledger', { finYear: fy, acno: acc }).then(d => { state.lastLedger = d; renderLedgerData(d); }).catch(err => showError('ledgerReportArea', err));
+  apiGet('ledger', { finYear: fy, acno: acc }).then(renderLedgerData).catch(err => showError('ledgerReportArea', err));
 }
 function renderLedgerData(d) {
   const closingYear = '20' + d.finYear.split('-')[1];
@@ -713,8 +715,7 @@ function confirmClose() {
 }
 
 // ---------------------------------------------------------------------
-// PDF generation (vector, via jspdf-autotable — draws real tables/text,
-// no DOM screenshotting, so nothing can overflow/clip like html2canvas did)
+// PDF generation + Share / Save
 // ---------------------------------------------------------------------
 function canShareFiles_() {
   try {
@@ -722,12 +723,33 @@ function canShareFiles_() {
       navigator.canShare({ files: [new File(['x'], 't.pdf', { type: 'application/pdf' })] }));
   } catch (e) { return false; }
 }
+
+function reportElementId_(view) { return view === 'bsie' ? 'bsieReportArea' : 'ledgerReportArea'; }
 function currentFinYear_(view) {
   return view === 'bsie' ? document.getElementById('b_fy').value : document.getElementById('l_fy').value;
 }
 function pdfFilename_(view, kind) {
   return 'IBRA_' + kind.replace(/\s+/g, '') + '_' + currentFinYear_(view) + '.pdf';
 }
+
+/** Renders a report container to a PDF Blob (A4), using pdf-export CSS mode so it looks like the print layout. */
+function makePdfBlob_(view) {
+  const el = document.getElementById(reportElementId_(view));
+  document.body.classList.add('pdf-export');
+  const { jsPDF } = window.jspdf;
+  const doc = new jsPDF('p', 'mm', 'a4');
+  return new Promise((resolve, reject) => {
+    doc.html(el, {
+      x: 8, y: 8, width: 194, windowWidth: 900,
+      html2canvas: { scale: 2, useCORS: true },
+      callback: function (finishedDoc) {
+        document.body.classList.remove('pdf-export');
+        try { resolve(finishedDoc.output('blob')); } catch (e) { reject(e); }
+      }
+    });
+  }).catch(err => { document.body.classList.remove('pdf-export'); throw err; });
+}
+
 function downloadBlob_(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -736,200 +758,16 @@ function downloadBlob_(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 4000);
 }
 
-const PDF_DARK = [17, 17, 17];
-const PDF_HEAD_BG = [242, 242, 242];
-const PDF_HEAD_TEXT = [70, 70, 70];
-const PDF_TOTAL_TEXT = [150, 30, 25];
-const PDF_TOTAL_BG = [247, 247, 247];
-
-/** Flattens BSIE groups into {ac, label, amount, cls} rows for the statement tables. Plain spaces (not unicode) for PDF font safety. */
-function flattenBsieGroupsForPdf_(groups) {
-  const rows = [];
-  groups.forEach(g => {
-    if (g.lines.length <= 1) {
-      rows.push({ ac: g.mapping, label: g.label, amount: g.subtotal, cls: '' });
-    } else {
-      rows.push({ ac: g.mapping, label: g.label, amount: '', cls: 'group' });
-      g.lines.forEach(l => rows.push({ ac: '', label: '    ' + l.acno + '-' + l.acname, amount: l.balance, cls: '' }));
-      rows.push({ ac: '', label: g.label + ' subtotal', amount: g.subtotal, cls: 'subtotal' });
-    }
-  });
-  return rows;
-}
-
-function pdfSectionTitleBar_(doc, y, marginX, usableWidth, title) {
-  doc.setFillColor.apply(doc, PDF_DARK);
-  doc.rect(marginX, y, usableWidth, 6.2, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont(undefined, 'bold'); doc.setFontSize(10.5);
-  doc.text(title, marginX + usableWidth / 2, y + 4.3, { align: 'center' });
-  return y + 6.2 + 3;
-}
-
-function pdfSignatories_(doc, y, marginX, usableWidth) {
-  const labels = ['President', 'General Secretary', 'Treasurer', 'Auditor'];
-  const colW = usableWidth / labels.length;
-  const lineY = y + 16;
-  doc.setDrawColor(60, 60, 60);
-  labels.forEach((label, i) => {
-    const cx = marginX + colW * i;
-    doc.line(cx + 6, lineY, cx + colW - 6, lineY);
-    doc.setFont(undefined, 'bold'); doc.setFontSize(9); doc.setTextColor(20, 20, 20);
-    doc.text(label, cx + colW / 2, lineY + 4.5, { align: 'center' });
-  });
-  return lineY + 10;
-}
-
-/** Draws two statement tables (e.g. Liabilities | Assets) side by side with a shared starting Y so their Total rows line up. */
-function pdfTwoColStatement_(doc, y, marginX, usableWidth, leftHead, leftGroups, leftTotal, rightHead, rightGroups, rightTotal) {
-  const gap = 5;
-  const halfW = (usableWidth - gap) / 2;
-  const acW = 11, amtW = 24;
-  const labelW = halfW - acW - amtW;
-
-  const L = flattenBsieGroupsForPdf_(leftGroups);
-  const R = flattenBsieGroupsForPdf_(rightGroups);
-  const n = Math.max(L.length, R.length, 1);
-  while (L.length < n) L.push({ ac: '', label: '', amount: '', cls: '' });
-  while (R.length < n) R.push({ ac: '', label: '', amount: '', cls: '' });
-
-  function draw(rows, headLabel, total, left) {
-    const body = rows.map(r => [r.ac, r.label, r.amount === '' ? '' : fmt(r.amount)]);
-    doc.autoTable({
-      startY: y,
-      margin: { left: left ? marginX : marginX + halfW + gap },
-      tableWidth: halfW,
-      head: [['AC', headLabel, 'Amount']],
-      body: body,
-      foot: [['', 'Total', fmt(total)]],
-      styles: { fontSize: 7.6, cellPadding: 1.3, overflow: 'linebreak', lineColor: [225, 225, 225], lineWidth: 0.1 },
-      headStyles: { fillColor: PDF_HEAD_BG, textColor: PDF_HEAD_TEXT, fontStyle: 'bold', fontSize: 7 },
-      footStyles: { fillColor: PDF_TOTAL_BG, textColor: PDF_TOTAL_TEXT, fontStyle: 'bold', fontSize: 8, lineWidth: { top: 0.4 } },
-      columnStyles: { 0: { cellWidth: acW, textColor: [90, 90, 90] }, 1: { cellWidth: labelW }, 2: { cellWidth: amtW, halign: 'right' } },
-      theme: 'plain',
-      didParseCell: function (data) {
-        if (data.section === 'body') {
-          const cls = rows[data.row.index] && rows[data.row.index].cls;
-          if (cls === 'group') data.cell.styles.fontStyle = 'bold';
-          if (cls === 'subtotal') { data.cell.styles.fontStyle = 'bold'; data.cell.styles.lineWidth = { top: 0.2 }; }
-        }
-      }
-    });
-    return doc.lastAutoTable.finalY;
-  }
-
-  const yLeft = draw(L, leftHead, leftTotal, true);
-  const yRight = draw(R, rightHead, rightTotal, false);
-  return Math.max(yLeft, yRight) + 6;
-}
-
-function buildBsiePdf_(d) {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF('p', 'mm', 'a4');
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const marginX = 10;
-  const usableWidth = pageWidth - marginX * 2;
-  const closingYear = '20' + d.finYear.split('-')[1];
-
-  let y = 12;
-  doc.setFillColor.apply(doc, PDF_DARK);
-  doc.rect(marginX, y, usableWidth, 9, 'F');
-  doc.setTextColor(255, 255, 255); doc.setFont(undefined, 'bold'); doc.setFontSize(13);
-  doc.text("Indian Bank Retirees' Association", pageWidth / 2, y + 6, { align: 'center' });
-  y += 9 + 4;
-
-  y = pdfSectionTitleBar_(doc, y, marginX, usableWidth, 'ASSETS AND LIABILITIES AS ON 30/06/' + closingYear);
-  y = pdfTwoColStatement_(doc, y, marginX, usableWidth, 'Liabilities', d.liabilities, d.totalLiabilities, 'Assets', d.assets, d.totalAssets);
-
-  y = pdfSectionTitleBar_(doc, y, marginX, usableWidth, 'INCOME AND EXPENDITURE AS ON 30/06/' + closingYear);
-  y = pdfTwoColStatement_(doc, y, marginX, usableWidth, 'Expenditure', d.expenditure, d.totalExpenditure, 'Income', d.income, d.totalIncome);
-
-  pdfSignatories_(doc, y, marginX, usableWidth);
-  return doc.output('blob');
-}
-
-function buildLedgerPdf_(d) {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF('p', 'mm', 'a4');
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const marginX = 10;
-  const usableWidth = pageWidth - marginX * 2;
-  const closingYear = '20' + d.finYear.split('-')[1];
-
-  function runningHeader() {
-    doc.setFont(undefined, 'normal'); doc.setFontSize(8); doc.setTextColor(130, 130, 130);
-    doc.text(d.finYear + ' LEDGER', marginX, 8);
-    doc.text(new Date().toLocaleDateString('en-GB'), pageWidth - marginX, 8, { align: 'right' });
-  }
-
-  let y = 14;
-  doc.setFillColor.apply(doc, PDF_DARK);
-  doc.rect(marginX, y, usableWidth, 9, 'F');
-  doc.setTextColor(255, 255, 255); doc.setFont(undefined, 'bold'); doc.setFontSize(13);
-  doc.text("Indian Bank Retirees' Association", pageWidth / 2, y + 6, { align: 'center' });
-  y += 9 + 5;
-  doc.setTextColor(30, 30, 30); doc.setFont(undefined, 'bold'); doc.setFontSize(11);
-  doc.text('LEDGER AS ON 30/06/' + closingYear, pageWidth / 2, y, { align: 'center' });
-  y += 9;
-
-  if (!d.accounts.length) {
-    doc.setFont(undefined, 'normal'); doc.setFontSize(10); doc.setTextColor(60, 60, 60);
-    doc.text('No entries for this selection.', marginX, y);
-  }
-
-  d.accounts.forEach(acc => {
-    if (y > pageHeight - 30) { doc.addPage(); y = 14; }
-    doc.setFont(undefined, 'bold'); doc.setFontSize(9.5); doc.setTextColor(20, 20, 20);
-    doc.text(acc.fullacname + '   (Closing: ' + fmt(acc.closingBalance) + ')', marginX, y);
-    y += 3;
-
-    const body = acc.entries.map(e => [
-      e.date, String(e.jrnlNo), e.particulars + (e.details ? (' — ' + e.details) : ''),
-      e.debit ? fmt(e.debit) : '', e.credit ? fmt(e.credit) : '', fmt(e.balance)
-    ]);
-
-    doc.autoTable({
-      startY: y,
-      margin: { left: marginX, right: marginX, top: 12 },
-      head: [['Date', 'Jrnl No', 'Particulars', 'Debit', 'Credit', 'Balance']],
-      body: body,
-      styles: { fontSize: 7.6, cellPadding: 1.3, overflow: 'linebreak', lineColor: [230, 230, 230], lineWidth: 0.1 },
-      headStyles: { fillColor: PDF_HEAD_BG, textColor: PDF_HEAD_TEXT, fontStyle: 'bold', fontSize: 7 },
-      columnStyles: {
-        0: { cellWidth: 20 }, 1: { cellWidth: 15 }, 2: { cellWidth: 'auto' },
-        3: { cellWidth: 22, halign: 'right' }, 4: { cellWidth: 22, halign: 'right' }, 5: { cellWidth: 24, halign: 'right' }
-      },
-      theme: 'plain',
-      didDrawPage: runningHeader
-    });
-    y = doc.lastAutoTable.finalY + 7;
-  });
-
-  if (y > pageHeight - 35) { doc.addPage(); y = 20; }
-  pdfSignatories_(doc, y, marginX, usableWidth);
-  return doc.output('blob');
-}
-
-function getPdfBlob_(view) {
-  if (view === 'bsie') {
-    if (!state.lastBsie) return Promise.reject(new Error('Report not loaded yet'));
-    return Promise.resolve(buildBsiePdf_(state.lastBsie));
-  }
-  if (!state.lastLedger) return Promise.reject(new Error('Report not loaded yet'));
-  return Promise.resolve(buildLedgerPdf_(state.lastLedger));
-}
-
 function savePdf(view, kind) {
   toast('Preparing PDF…');
-  getPdfBlob_(view)
+  makePdfBlob_(view)
     .then(blob => { downloadBlob_(blob, pdfFilename_(view, kind)); toast('PDF saved to your device.'); })
     .catch(err => toast('Could not generate PDF: ' + (err.message || err), true));
 }
 
 function shareWhatsAppPdf(view, kind) {
   toast('Preparing PDF…');
-  getPdfBlob_(view).then(blob => {
+  makePdfBlob_(view).then(blob => {
     const filename = pdfFilename_(view, kind);
     const file = new File([blob], filename, { type: 'application/pdf' });
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
