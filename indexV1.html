@@ -602,13 +602,17 @@ function loadLedger() {
   document.getElementById('printHeaderSub').innerText = fy + ' LEDGER';
   apiGet('ledger', { finYear: fy, acno: acc }).then(renderLedgerData).catch(err => showError('ledgerReportArea', err));
 }
+function todayDdMmYyyy_() {
+  const d = new Date();
+  const p = n => String(n).padStart(2, '0');
+  return p(d.getDate()) + '-' + p(d.getMonth() + 1) + '-' + d.getFullYear();
+}
 function renderLedgerData(d) {
-  const closingYear = '20' + d.finYear.split('-')[1];
   // Heading appears once, at the very top of normal document flow — so when printed
   // it naturally shows on page 1 only; it is not part of the repeating fixed header.
   const heading =
     '<div class="org-heading-bar">Indian Bank Retirees\' Association</div>' +
-    '<div class="report-subheading">LEDGER AS ON 30/06/' + closingYear + '</div>';
+    '<div class="report-subheading">LEDGER AS ON ' + todayDdMmYyyy_() + '</div>';
 
   if (!d.accounts.length) {
     document.getElementById('ledgerReportArea').innerHTML = '<div class="card">' + heading + '<p>No entries for this selection.</p></div>';
