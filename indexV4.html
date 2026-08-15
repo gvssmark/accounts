@@ -123,26 +123,14 @@
   table.bsie-table .grand-total td { font-weight: bold; font-size: 13px; color: #b3261e; border-top: 2px solid #333; background: #f7f7f7; }
 
   /* Ledger / plain report tables: force wrap on the Particulars column so it never overflows */
-  table.report.ledger-table { table-layout: fixed; width: 100%; }
-  table.report.ledger-table th, table.report.ledger-table td { overflow-wrap: break-word; word-break: break-word; white-space: normal; }
-  table.report.ledger-table th:nth-child(1), table.report.ledger-table td:nth-child(1) { width: 12%; }
-  table.report.ledger-table th:nth-child(2), table.report.ledger-table td:nth-child(2) { width: 9%; }
-  table.report.ledger-table th:nth-child(3), table.report.ledger-table td:nth-child(3) { width: 39%; text-align: left; }
-  table.report.ledger-table th:nth-child(4), table.report.ledger-table td:nth-child(4),
-  table.report.ledger-table th:nth-child(5), table.report.ledger-table td:nth-child(5),
-  table.report.ledger-table th:nth-child(6), table.report.ledger-table td:nth-child(6) { width: 13.33%; }
-
-  /* Accounts Report table (8 columns) */
-  table.report.accounts-report-table { table-layout: fixed; width: 100%; }
-  table.report.accounts-report-table th, table.report.accounts-report-table td { overflow-wrap: break-word; word-break: break-word; white-space: normal; }
-  table.report.accounts-report-table th:nth-child(1), table.report.accounts-report-table td:nth-child(1) { width: 8%; }
-  table.report.accounts-report-table th:nth-child(2), table.report.accounts-report-table td:nth-child(2) { width: 8%; }
-  table.report.accounts-report-table th:nth-child(3), table.report.accounts-report-table td:nth-child(3) { width: 26%; text-align: left; }
-  table.report.accounts-report-table th:nth-child(4), table.report.accounts-report-table td:nth-child(4),
-  table.report.accounts-report-table th:nth-child(6), table.report.accounts-report-table td:nth-child(6) { width: 8%; }
-  table.report.accounts-report-table th:nth-child(5), table.report.accounts-report-table td:nth-child(5),
-  table.report.accounts-report-table th:nth-child(7), table.report.accounts-report-table td:nth-child(7),
-  table.report.accounts-report-table th:nth-child(8), table.report.accounts-report-table td:nth-child(8) { width: 14%; }
+  table.report:not(.bsie-table) { table-layout: fixed; width: 100%; }
+  table.report:not(.bsie-table) th, table.report:not(.bsie-table) td { overflow-wrap: break-word; word-break: break-word; white-space: normal; }
+  table.report:not(.bsie-table) th:nth-child(1), table.report:not(.bsie-table) td:nth-child(1) { width: 12%; }
+  table.report:not(.bsie-table) th:nth-child(2), table.report:not(.bsie-table) td:nth-child(2) { width: 9%; }
+  table.report:not(.bsie-table) th:nth-child(3), table.report:not(.bsie-table) td:nth-child(3) { width: 39%; text-align: left; }
+  table.report:not(.bsie-table) th:nth-child(4), table.report:not(.bsie-table) td:nth-child(4),
+  table.report:not(.bsie-table) th:nth-child(5), table.report:not(.bsie-table) td:nth-child(5),
+  table.report:not(.bsie-table) th:nth-child(6), table.report:not(.bsie-table) td:nth-child(6) { width: 13.33%; }
 
   /* signatories */
   .signatories { display: flex; justify-content: space-between; margin-top: 46px; gap: 10px; }
@@ -220,7 +208,6 @@
   <a href="#account" data-route="account">Account Addition</a>
   <a href="#bsie" data-route="bsie">BSIE Reports</a>
   <a href="#ledger" data-route="ledger">Ledger Reports</a>
-  <a href="#accountsReport" data-route="accountsReport">Accounts Report</a>
   <a href="#close" data-route="close">Financial Year Closing</a>
 </nav>
 
@@ -236,10 +223,11 @@
 // ==========================================================================
 // Configure this
 // ==========================================================================
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwGlDlzRCt6b25H5BPfLaT-bfSNtKsK1koBegnAB_pylyNhxNvKHkGRpoBc-L4Bo9dVcg/exec';
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycby5nDN-T4n6ivA7N7wL5_K-7ouB-lEaZ7TGrF30wsDZnxZAQeI-6Y5wIjyQPrIyVz_O9Q/exec';
+
 // ==========================================================================
 
-const state = { finYears: [], accounts: [], bsieCodes: [], lastBsie: null, lastLedger: null, lastAccountsReport: null };
+const state = { finYears: [], accounts: [], bsieCodes: [], lastBsie: null, lastLedger: null };
 
 // ---------------------------------------------------------------------
 // Nav / routing
@@ -259,7 +247,6 @@ const ROUTES = {
   account: renderAccount,
   bsie: renderBsie,
   ledger: renderLedger,
-  accountsReport: renderAccountsReport,
   close: renderClose
 };
 
@@ -658,58 +645,10 @@ function renderLedgerData(d) {
     ).join('');
     return '<div class="account-block">' +
       '<div class="account-header"><span>' + escapeHtml(acc.fullacname) + '</span><span>Closing: ' + fmt(acc.closingBalance) + '</span></div>' +
-      '<div class="table-wrap"><table class="report stack ledger-table"><thead><tr><th>Date</th><th>Jrnl No</th><th>Particulars</th>' +
+      '<div class="table-wrap"><table class="report stack"><thead><tr><th>Date</th><th>Jrnl No</th><th>Particulars</th>' +
       '<th>Debit</th><th>Credit</th><th>Balance</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
   }).join('');
   document.getElementById('ledgerReportArea').innerHTML = '<div class="card">' + heading + body + signatoriesBlock_() + '</div>';
-}
-
-// ---------------------------------------------------------------------
-// Accounts Report
-// ---------------------------------------------------------------------
-function renderAccountsReport(params) {
-  getFinYears().then(fys => {
-    document.getElementById('app').innerHTML =
-      '<div class="card no-print">' +
-      '<h2>Accounts Report</h2>' +
-      '<div class="report-toolbar">' +
-        '<div><label>Financial Year</label><select id="ar_fy" onchange="loadAccountsReport()">' +
-          fys.map(fy => '<option value="' + fy + '">' + fy + '</option>').join('') + '</select></div>' +
-        '<div><button class="btn secondary" onclick="savePdf(\'accountsReport\',\'AccountsReport\')">Save PDF (A4)</button></div>' +
-        (canShareFiles_() ? '<div><button class="btn secondary" onclick="shareWhatsAppPdf(\'accountsReport\',\'AccountsReport\')">Share via WhatsApp</button></div>' : '') +
-      '</div></div>' +
-      '<div id="accountsReportArea"></div>';
-    const fy = (params && params.fy && fys.includes(params.fy)) ? params.fy : (fys[fys.length - 1] || '');
-    document.getElementById('ar_fy').value = fy;
-    loadAccountsReport();
-  }).catch(err => showError('app', err));
-}
-function loadAccountsReport() {
-  const fy = document.getElementById('ar_fy').value;
-  document.getElementById('printHeaderSub').innerText = fy + ' ACCOUNTS';
-  apiGet('accountsReport', { finYear: fy }).then(d => { state.lastAccountsReport = d; renderAccountsReportData(d); }).catch(err => showError('accountsReportArea', err));
-}
-function renderAccountsReportData(d) {
-  const rows = d.accounts.map(a =>
-    '<tr>' +
-    '<td data-label="AC">' + escapeHtml(a.acno) + '</td>' +
-    '<td data-label="BSIE">' + escapeHtml(a.bsie) + '</td>' +
-    '<td data-label="Name">' + escapeHtml(a.acname) + '</td>' +
-    '<td data-label="Dr Count">' + a.debitCount + '</td>' +
-    '<td data-label="Total Debits">' + fmt(a.totalDebits) + '</td>' +
-    '<td data-label="Cr Count">' + a.creditCount + '</td>' +
-    '<td data-label="Total Credits">' + fmt(a.totalCredits) + '</td>' +
-    '<td data-label="Balance">' + fmt(a.balance) + '</td>' +
-    '</tr>'
-  ).join('');
-  document.getElementById('accountsReportArea').innerHTML =
-    '<div class="card">' +
-    '<div class="org-heading-bar">Indian Bank Retirees\' Association</div>' +
-    '<div class="report-subheading">ACCOUNTS REPORT — FY ' + escapeHtml(d.finYear) + '</div>' +
-    '<div class="table-wrap"><table class="report stack accounts-report-table"><thead><tr>' +
-    '<th>AC</th><th>BSIE</th><th>Name</th><th>Dr Count</th><th>Total Debits</th><th>Cr Count</th><th>Total Credits</th><th>Balance</th>' +
-    '</tr></thead><tbody>' + rows + '</tbody></table></div>' +
-    '</div>';
 }
 
 // ---------------------------------------------------------------------
@@ -784,9 +723,7 @@ function canShareFiles_() {
   } catch (e) { return false; }
 }
 function currentFinYear_(view) {
-  if (view === 'bsie') return document.getElementById('b_fy').value;
-  if (view === 'accountsReport') return document.getElementById('ar_fy').value;
-  return document.getElementById('l_fy').value;
+  return view === 'bsie' ? document.getElementById('b_fy').value : document.getElementById('l_fy').value;
 }
 function pdfFilename_(view, kind) {
   return 'IBRA_' + kind.replace(/\s+/g, '') + '_' + currentFinYear_(view) + '.pdf';
@@ -974,54 +911,10 @@ function buildLedgerPdf_(d) {
   return doc.output('blob');
 }
 
-function buildAccountsReportPdf_(d) {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF('p', 'mm', 'a4');
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const marginX = 10;
-  const usableWidth = pageWidth - marginX * 2;
-
-  let y = 12;
-  doc.setFillColor.apply(doc, PDF_DARK);
-  doc.rect(marginX, y, usableWidth, 9, 'F');
-  doc.setTextColor(255, 255, 255); doc.setFont(undefined, 'bold'); doc.setFontSize(13);
-  doc.text("Indian Bank Retirees' Association", pageWidth / 2, y + 6, { align: 'center' });
-  y += 9 + 4;
-  y = pdfSectionTitleBar_(doc, y, marginX, usableWidth, 'ACCOUNTS REPORT — FY ' + d.finYear);
-
-  const body = d.accounts.map(a => [
-    a.acno, a.bsie, a.acname,
-    String(a.debitCount), fmt(a.totalDebits),
-    String(a.creditCount), fmt(a.totalCredits),
-    fmt(a.balance)
-  ]);
-
-  doc.autoTable({
-    startY: y,
-    margin: { left: marginX, right: marginX },
-    head: [['AC', 'BSIE', 'Name', 'Dr Count', 'Total Debits', 'Cr Count', 'Total Credits', 'Balance']],
-    body: body,
-    styles: { fontSize: 7.6, cellPadding: 1.3, overflow: 'linebreak', lineColor: [230, 230, 230], lineWidth: 0.1 },
-    headStyles: { fillColor: PDF_HEAD_BG, textColor: PDF_HEAD_TEXT, fontStyle: 'bold', fontSize: 7 },
-    columnStyles: {
-      0: { cellWidth: 13 }, 1: { cellWidth: 13 }, 2: { cellWidth: 'auto' },
-      3: { cellWidth: 15, halign: 'right' }, 4: { cellWidth: 24, halign: 'right' },
-      5: { cellWidth: 15, halign: 'right' }, 6: { cellWidth: 24, halign: 'right' }, 7: { cellWidth: 24, halign: 'right' }
-    },
-    theme: 'plain'
-  });
-
-  return doc.output('blob');
-}
-
 function getPdfBlob_(view) {
   if (view === 'bsie') {
     if (!state.lastBsie) return Promise.reject(new Error('Report not loaded yet'));
     return Promise.resolve(buildBsiePdf_(state.lastBsie));
-  }
-  if (view === 'accountsReport') {
-    if (!state.lastAccountsReport) return Promise.reject(new Error('Report not loaded yet'));
-    return Promise.resolve(buildAccountsReportPdf_(state.lastAccountsReport));
   }
   if (!state.lastLedger) return Promise.reject(new Error('Report not loaded yet'));
   return Promise.resolve(buildLedgerPdf_(state.lastLedger));

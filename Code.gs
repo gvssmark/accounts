@@ -43,6 +43,7 @@ function doGet(e) {
     else if (action === 'finYears') data = { finYears: getFinYearList_() };
     else if (action === 'ledger') data = getLedgerData(e.parameter.finYear, e.parameter.acno || 'ALL');
     else if (action === 'bsie') data = getBsieData(e.parameter.finYear);
+    else if (action === 'accountsReport') data = getAccountsReport(e.parameter.finYear);
     else if (action === 'closeYearPreview') data = previewCloseFinancialYear(e.parameter.finYear);
     else throw new Error('Unknown action: ' + action);
     return jsonOutput_({ ok: true, data: data });
@@ -159,20 +160,22 @@ function getJournalFormData() {
   const col = headerMap_(values);
 
   let maxFinYear = null;
-  let maxJrnlNo = 0;
-
   for (let i = 1; i < values.length; i++) {
-    const row = values[i];
-    if (row[col['finyear']]) {
-      const fy = String(row[col['finyear']]);
-      if (!maxFinYear || compareFinYear_(fy, maxFinYear) > 0) maxFinYear = fy;
+    const fy = values[i][col['finyear']];
+    if (fy) {
+      const fyStr = String(fy);
+      if (!maxFinYear || compareFinYear_(fyStr, maxFinYear) > 0) maxFinYear = fyStr;
     }
-    const n = Number(row[col['jrnlno']]);
-    if (!isNaN(n) && n > maxJrnlNo) maxJrnlNo = n;
   }
-
   if (!maxFinYear) maxFinYear = finYearFromDate_(new Date());
   const bounds = finYearBounds_(maxFinYear);
+
+  let maxJrnlNo = 0;
+  for (let i = 1; i < values.length; i++) {
+    if (String(values[i][col['finyear']]) !== maxFinYear) continue;
+    const n = Number(values[i][col['jrnlno']]);
+    if (!isNaN(n) && n > maxJrnlNo) maxJrnlNo = n;
+  }
 
   return {
     finYear: maxFinYear,
@@ -211,6 +214,7 @@ function submitJournalEntry(entry) {
 
   let maxJrnlNo = 0;
   for (let i = 1; i < values.length; i++) {
+    if (String(values[i][col['finyear']]) !== entry.finYear) continue;
     const n = Number(values[i][col['jrnlno']]);
     if (!isNaN(n) && n > maxJrnlNo) maxJrnlNo = n;
   }
@@ -385,6 +389,45 @@ function computeAccountBalances_(finYear) {
   });
 
   return byFullName; // fullacname -> {account, totalDebits, totalCredits, balance}
+}
+
+/**
+ * Accounts Report for a finYear: AccountNo, BSIE, Name, debit count, total debits,
+ * credit count, total credits, balance — sorted by account number.
+ */
+function getAccountsReport(finYear) {
+  if (!finYear) throw new Error('finYear is required');
+  const accounts = getAllAccounts_();
+  const rows = getJournalRowsForFY_(finYear);
+
+  const counts = {}; // fullacname -> {debitCount, creditCount}
+  accounts.forEach(a => { counts[a.fullacname] = { debitCount: 0, creditCount: 0 }; });
+  rows.forEach(r => {
+    if (counts[r.drAccount]) counts[r.drAccount].debitCount++;
+    if (counts[r.crAccount]) counts[r.crAccount].creditCount++;
+  });
+
+  const balances = computeAccountBalances_(finYear);
+
+  const result = accounts
+    .slice()
+    .sort((a, b) => a.acno.localeCompare(b.acno))
+    .map(a => {
+      const bal = balances[a.fullacname];
+      const cnt = counts[a.fullacname];
+      return {
+        acno: a.acno,
+        bsie: a.bsie,
+        acname: a.acname,
+        debitCount: cnt.debitCount,
+        totalDebits: bal.totalDebits,
+        creditCount: cnt.creditCount,
+        totalCredits: bal.totalCredits,
+        balance: bal.balance
+      };
+    });
+
+  return { finYear: finYear, accounts: result };
 }
 
 /**
@@ -590,6 +633,7 @@ function closeFinancialYear(oldFinYear, passcode) {
 
   let maxJrnlNo = 0;
   for (let i = 1; i < values.length; i++) {
+    if (String(values[i][col['finyear']]) !== plan.newFinYear) continue;
     const n = Number(values[i][col['jrnlno']]);
     if (!isNaN(n) && n > maxJrnlNo) maxJrnlNo = n;
   }
