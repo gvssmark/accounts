@@ -228,11 +228,9 @@
       <div class="capture-box">
         <div class="btnrow">
           <button type="button" class="btn" id="photoTakeBtn">Take Photo</button>
-          <button type="button" class="btn" id="photoSelfieBtn">Take Selfie</button>
           <button type="button" class="btn secondary" id="photoUploadBtn">Upload from Gallery</button>
         </div>
         <input type="file" id="photoCaptureInput" accept="image/*" capture="environment">
-        <input type="file" id="photoSelfieInput" accept="image/*" capture="user">
         <input type="file" id="photoGalleryInput" accept="image/*">
         <img id="photoPreview" class="capture-preview photo" style="display:none;">
         <div class="btnrow" id="photoRemoveRow" style="display:none;">
@@ -620,9 +618,8 @@ function fileToDataUrl(file){
 let photoDataUrl = null;
 
 $('photoTakeBtn').addEventListener('click', ()=> $('photoCaptureInput').click());
-$('photoSelfieBtn').addEventListener('click', ()=> $('photoSelfieInput').click());
 $('photoUploadBtn').addEventListener('click', ()=> $('photoGalleryInput').click());
-function handlePhotoFile(inp, zoom){
+function handlePhotoFile(inp){
   inp.addEventListener('change', async e=>{
     const file = e.target.files[0]; if(!file) return;
     const dataUrl = await fileToDataUrl(file);
@@ -631,13 +628,12 @@ function handlePhotoFile(inp, zoom){
       $('photoPreview').src = out; $('photoPreview').style.display='block';
       $('photoRemoveRow').style.display='flex';
       setErr('photo','');
-    }, zoom);
+    }, 1);
     e.target.value = '';
   });
 }
-handlePhotoFile($('photoCaptureInput'), 1);
-handlePhotoFile($('photoGalleryInput'), 1);
-handlePhotoFile($('photoSelfieInput'), 0.6); // selfies are typically close-up — start zoomed out so the full head/shoulders are visible
+handlePhotoFile($('photoCaptureInput'));
+handlePhotoFile($('photoGalleryInput'));
 $('photoRemoveBtn').addEventListener('click', ()=>{
   photoDataUrl = null; $('photoPreview').style.display='none'; $('photoRemoveRow').style.display='none';
 });
@@ -872,7 +868,10 @@ function buildPdf(d){
     theme: 'plain'
   });
 
-  y = Math.max(doc.lastAutoTable.finalY, photoY + photoH) + 8;
+  y = Math.max(doc.lastAutoTable.finalY, photoY + photoH) + 6;
+  doc.setDrawColor(26,115,232); doc.setLineWidth(0.4);
+  doc.line(marginX, y, pageWidth-marginX, y);
+  y += 8;
 
   doc.setFont(undefined,'normal'); doc.setFontSize(10.5); doc.setTextColor(20,20,20);
   const leftLines = [
@@ -883,7 +882,7 @@ function buildPdf(d){
   y += 4;
   doc.text('Dear Comrade,', marginX, y); y += 7;
 
-  const bodyText = "Please enrol me as member of the Retirees' Association. I have read the Bye-laws and rules of the "+
+  const bodyText = "The above is my data. Please enrol me as member of the Retirees' Association. I have read the Bye-laws and rules of the "+
     "Association and I am willing to abide by them. I am remitting a sum of Rs.1000/- (Rupees One Thousand only) "+
     "towards one time admission fee and Life Membership. Amount Credited to SB Account No 465693063 with Indian Bank, "+
     "Himayatnagar Branch / Demand Draft / Cheque favouring Indian Bank Retirees' Association, AP & TS is enclosed.";
