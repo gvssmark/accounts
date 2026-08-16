@@ -53,10 +53,10 @@
   .tabbtn.active { background:var(--brand); color:#fff; border-color:var(--brand); }
 
   /* fullscreen signature pad */
-  .sig-fullscreen { position:fixed; inset:0; background:#fff; z-index:800; display:none; flex-direction:column; }
-  .sig-fs-hint { text-align:center; font-size:12px; color:#888; padding:6px 10px; }
-  #sigFsCanvas { flex:1; width:100%; touch-action:none; background:#fff; display:block; }
-  .sig-fs-actions { display:flex; gap:10px; padding:10px; justify-content:center; border-top:1px solid var(--border); }
+  .sig-fullscreen { position:fixed; inset:0; height:100vh; height:100dvh; background:#fff; z-index:800; display:none; flex-direction:column; }
+  .sig-fs-hint { flex:0 0 auto; text-align:center; font-size:12px; color:#888; padding:6px 10px; }
+  #sigFsCanvas { flex:1 1 auto; min-height:0; min-width:0; width:100%; touch-action:none; background:#fff; display:block; }
+  .sig-fs-actions { flex:0 0 auto; display:flex; gap:10px; padding:10px; justify-content:center; border-top:1px solid var(--border); }
   .sig-fs-actions button { flex:1; max-width:220px; padding:14px; font-size:15px; }
 
   /* crop modal */
@@ -67,10 +67,19 @@
   .crop-stage img { display:block; width:100%; user-select:none; -webkit-user-drag:none; }
   .crop-box { position:absolute; border:2px solid #fff; box-shadow:0 0 0 2000px rgba(0,0,0,.45); cursor:move; touch-action:none; }
   .crop-handle { position:absolute; right:-8px; bottom:-8px; width:20px; height:20px; background:var(--brand); border:2px solid #fff; border-radius:50%; cursor:nwse-resize; touch-action:none; }
+  .crop-zoom-row { display:flex; align-items:center; gap:8px; margin-top:10px; font-size:12px; color:#555; }
+  .crop-zoom-row input[type=range] { flex:1; }
   .modal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:12px; }
 
-  /* result / preview */
-  #pdfPreviewFrame { width:100%; height:60vh; min-height:360px; border:1px solid var(--border); border-radius:6px; }
+  /* result / data summary */
+  #dataSummary { font-size:13px; }
+  #dataSummary table { width:100%; border-collapse:collapse; }
+  #dataSummary td { padding:6px 4px; border-bottom:1px solid var(--border); vertical-align:top; }
+  #dataSummary td.k { font-weight:bold; color:#555; width:42%; }
+  #dataSummary .thumbrow { display:flex; gap:16px; margin-bottom:12px; flex-wrap:wrap; }
+  #dataSummary .thumbrow div { text-align:center; }
+  #dataSummary .thumbrow img { display:block; border:1px solid var(--border); border-radius:6px; }
+  #dataSummary .thumbrow .cap { font-size:11px; color:#888; margin-top:3px; }
   .msg-error { color:var(--err); font-size:13px; margin-top:8px; white-space:pre-wrap; }
   .msg-ok { color:var(--ok); font-size:13px; margin-top:8px; }
   #successBanner { display:none; text-align:center; font-size:16px; font-weight:bold; color:var(--ok); background:#e6f4ea; border-color:#bfe3c9; }
@@ -219,9 +228,11 @@
       <div class="capture-box">
         <div class="btnrow">
           <button type="button" class="btn" id="photoTakeBtn">Take Photo</button>
+          <button type="button" class="btn" id="photoSelfieBtn">Take Selfie</button>
           <button type="button" class="btn secondary" id="photoUploadBtn">Upload from Gallery</button>
         </div>
         <input type="file" id="photoCaptureInput" accept="image/*" capture="environment">
+        <input type="file" id="photoSelfieInput" accept="image/*" capture="user">
         <input type="file" id="photoGalleryInput" accept="image/*">
         <img id="photoPreview" class="capture-preview photo" style="display:none;">
         <div class="btnrow" id="photoRemoveRow" style="display:none;">
@@ -276,7 +287,7 @@
 
   <div class="card" id="resultCard" style="display:none;">
     <h2>Enrollment Form Ready</h2>
-    <iframe id="pdfPreviewFrame" title="PDF preview"></iframe>
+    <div id="dataSummary"></div>
     <div class="btnrow" style="justify-content:flex-start; margin-top:12px;">
       <button type="button" class="btn secondary" id="editBtn">Edit</button>
       <button type="button" class="btn" id="whatsappBtn">Send to WhatsApp</button>
@@ -303,6 +314,11 @@
     <div class="crop-stage" id="cropStage">
       <img id="cropImg">
       <div class="crop-box" id="cropBox"><div class="crop-handle" id="cropHandle"></div></div>
+    </div>
+    <div class="crop-zoom-row">
+      <span>Zoom out</span>
+      <input type="range" id="cropZoom" min="0.4" max="1.5" step="0.02" value="1">
+      <span>Zoom in</span>
     </div>
     <div class="modal-actions">
       <button type="button" class="btn secondary" id="cropCancelBtn">Cancel</button>
@@ -482,31 +498,49 @@ function validateForm(){
 // Generic Cropper
 // ---------------------------------------------------------------------
 let cropState = null;
+const CROP_STAGE_HEIGHT = 340;
 
-function openCropper(dataUrl, aspect, outW, outH, title, onDone){
+function openCropper(dataUrl, aspect, outW, outH, title, onDone, initialZoom){
   const img = $('cropImg'), stage = $('cropStage');
   $('cropTitle').textContent = title;
   $('cropModal').style.display = 'flex';
+  stage.style.height = CROP_STAGE_HEIGHT + 'px';
+  img.style.position = 'absolute';
   img.src = dataUrl;
 
   img.onload = () => {
     const natW = img.naturalWidth, natH = img.naturalHeight;
     requestAnimationFrame(() => {
-      const dispW = stage.clientWidth;
-      const dispH = dispW * (natH/natW);
-      stage.style.height = dispH + 'px';
-      img.style.height = dispH + 'px';
-
-      let bw = Math.min(dispW, dispH*aspect) * 0.85;
-      let bh = bw / aspect;
-      let bx = (dispW - bw)/2, by = (dispH - bh)/2;
-
-      cropState = { natW, natH, dispW, dispH, aspect, outW, outH, onDone, bx, by, bw, bh };
-      layoutBox();
+      const stageW = stage.clientWidth, stageH = CROP_STAGE_HEIGHT;
+      cropState = { natW, natH, stageW, stageH, aspect, outW, outH, onDone, zoom: initialZoom || 1 };
+      $('cropZoom').value = cropState.zoom;
+      applyZoomAndCenterBox();
     });
   };
   if(img.complete && img.naturalWidth) img.onload();
 }
+
+function applyZoomAndCenterBox(){
+  const s = cropState, img = $('cropImg');
+  const baseScale = Math.min(s.stageW/s.natW, s.stageH/s.natH);
+  const dispW = s.natW * baseScale * s.zoom;
+  const dispH = s.natH * baseScale * s.zoom;
+  const imgX = (s.stageW - dispW)/2, imgY = (s.stageH - dispH)/2;
+  s.dispW = dispW; s.dispH = dispH; s.imgX = imgX; s.imgY = imgY;
+  img.style.left = imgX+'px'; img.style.top = imgY+'px';
+  img.style.width = dispW+'px'; img.style.height = dispH+'px';
+
+  let bw = Math.min(dispW, dispH*s.aspect) * 0.85;
+  let bh = bw / s.aspect;
+  s.bx = imgX + (dispW-bw)/2; s.by = imgY + (dispH-bh)/2; s.bw = bw; s.bh = bh;
+  layoutBox();
+}
+
+$('cropZoom').addEventListener('input', e=>{
+  if(!cropState) return;
+  cropState.zoom = parseFloat(e.target.value);
+  applyZoomAndCenterBox();
+});
 
 function layoutBox(){
   const box = $('cropBox');
@@ -515,8 +549,10 @@ function layoutBox(){
 }
 function clampBox(){
   const s = cropState;
-  s.bx = Math.max(0, Math.min(s.bx, s.dispW - s.bw));
-  s.by = Math.max(0, Math.min(s.by, s.dispH - s.bh));
+  const minX = s.imgX, maxX = s.imgX + s.dispW - s.bw;
+  const minY = s.imgY, maxY = s.imgY + s.dispH - s.bh;
+  s.bx = Math.max(minX, Math.min(s.bx, Math.max(minX,maxX)));
+  s.by = Math.max(minY, Math.min(s.by, Math.max(minY,maxY)));
 }
 
 (function(){
@@ -542,9 +578,10 @@ function clampBox(){
   });
   handle.addEventListener('pointermove', e=>{
     if(!resizing || !cropState) return;
+    const s = cropState;
     let neww = Math.max(40, rw0 + (e.clientX-rsx));
-    neww = Math.min(neww, cropState.dispW - cropState.bx, (cropState.dispH - cropState.by)*cropState.aspect);
-    cropState.bw = neww; cropState.bh = neww/cropState.aspect;
+    neww = Math.min(neww, s.imgX+s.dispW - s.bx, (s.imgY+s.dispH - s.by)*s.aspect);
+    s.bw = neww; s.bh = neww/s.aspect;
     layoutBox();
   });
   handle.addEventListener('pointerup', ()=>{ resizing=false; });
@@ -555,7 +592,7 @@ $('cropCancelBtn').addEventListener('click', ()=>{ $('cropModal').style.display=
 $('cropConfirmBtn').addEventListener('click', ()=>{
   const s = cropState; if(!s) return;
   const scale = s.natW / s.dispW;
-  const sx = s.bx*scale, sy = s.by*scale, sw = s.bw*scale, sh = s.bh*scale;
+  const sx = (s.bx - s.imgX)*scale, sy = (s.by - s.imgY)*scale, sw = s.bw*scale, sh = s.bh*scale;
   const canvas = document.createElement('canvas');
   canvas.width = s.outW; canvas.height = s.outH;
   const ctx = canvas.getContext('2d');
@@ -583,8 +620,9 @@ function fileToDataUrl(file){
 let photoDataUrl = null;
 
 $('photoTakeBtn').addEventListener('click', ()=> $('photoCaptureInput').click());
+$('photoSelfieBtn').addEventListener('click', ()=> $('photoSelfieInput').click());
 $('photoUploadBtn').addEventListener('click', ()=> $('photoGalleryInput').click());
-[$('photoCaptureInput'), $('photoGalleryInput')].forEach(inp=>{
+function handlePhotoFile(inp, zoom){
   inp.addEventListener('change', async e=>{
     const file = e.target.files[0]; if(!file) return;
     const dataUrl = await fileToDataUrl(file);
@@ -593,10 +631,13 @@ $('photoUploadBtn').addEventListener('click', ()=> $('photoGalleryInput').click(
       $('photoPreview').src = out; $('photoPreview').style.display='block';
       $('photoRemoveRow').style.display='flex';
       setErr('photo','');
-    });
+    }, zoom);
     e.target.value = '';
   });
-});
+}
+handlePhotoFile($('photoCaptureInput'), 1);
+handlePhotoFile($('photoGalleryInput'), 1);
+handlePhotoFile($('photoSelfieInput'), 0.6); // selfies are typically close-up — start zoomed out so the full head/shoulders are visible
 $('photoRemoveBtn').addEventListener('click', ()=>{
   photoDataUrl = null; $('photoPreview').style.display='none'; $('photoRemoveRow').style.display='none';
 });
@@ -879,6 +920,28 @@ function pdfFilename(d){
   return 'IBRA_Enrollment_' + (d.srno||'') + '_' + safe + '.pdf';
 }
 
+function esc(v){
+  const d = document.createElement('div'); d.textContent = v==null?'':String(v); return d.innerHTML;
+}
+
+function renderDataSummary(d){
+  const rows = [
+    ['SR No', d.srno], ['Name', d.name],
+    ['Date of Birth', isoToDMY(d.dob)], ['Date of Joining Bank', isoToDMY(d.doj)], ['Date of Retirement', isoToDMY(d.dor)],
+    ['Pension Branch', d.pensionBranch || '-'], ['Pension Account No', d.pensionAcNo || '-'],
+    ['Address', [d.addr1,d.addr2,d.addr3].filter(Boolean).join(', ')],
+    ['District', d.district || '-'], ['Vill/Town/City', d.village], ['State', d.state], ['PIN Code', d.pin],
+    ['Mobile 1', d.mobile1], ['Mobile 2', d.mobile2 || '-'], ['Email', d.email || '-'],
+    ['Spouse Name', d.spouseName || '-']
+  ];
+  const thumbs = '<div class="thumbrow">'
+    + (photoDataUrl ? '<div><img src="'+photoDataUrl+'" style="width:80px;height:103px;object-fit:cover;"><div class="cap">Photo</div></div>' : '')
+    + (sigDataUrl ? '<div><img src="'+sigDataUrl+'" style="width:150px;height:50px;object-fit:contain;background:#fff;"><div class="cap">Signature</div></div>' : '')
+    + '</div>';
+  const table = '<table>' + rows.map(r=>'<tr><td class="k">'+esc(r[0])+'</td><td>'+esc(r[1])+'</td></tr>').join('') + '</table>';
+  return thumbs + table;
+}
+
 // ---------------------------------------------------------------------
 // Generate / Preview / Edit / Send flow
 // ---------------------------------------------------------------------
@@ -910,7 +973,7 @@ $('generateBtn').addEventListener('click', ()=>{
 
   if(lastPdfUrl) URL.revokeObjectURL(lastPdfUrl);
   lastPdfUrl = URL.createObjectURL(lastPdfBlob);
-  $('pdfPreviewFrame').src = lastPdfUrl;
+  $('dataSummary').innerHTML = renderDataSummary(d);
   $('downloadLink').href = lastPdfUrl;
   $('downloadLink').download = lastFilename;
 
@@ -944,7 +1007,7 @@ $('whatsappBtn').addEventListener('click', ()=>{
   if(!lastPdfBlob){ toast('Generate the PDF first.'); return; }
   const file = new File([lastPdfBlob], lastFilename, { type:'application/pdf' });
   if(navigator.canShare && navigator.canShare({ files:[file] })){
-    navigator.share({ files:[file], title:'IBRA Enrollment Form', text: lastDataString })
+    navigator.share({ files:[file], title:'IBRA Enrollment Form' })
       .then(()=>{ finishSend(); })
       .catch(err=>{
         if(err && err.name==='AbortError'){ toast('Sharing cancelled.'); }
@@ -952,7 +1015,7 @@ $('whatsappBtn').addEventListener('click', ()=>{
       });
   } else {
     downloadBlob(lastPdfBlob, lastFilename);
-    window.open('https://wa.me/'+WHATSAPP_NUMBER+'?text='+encodeURIComponent(lastDataString), '_blank');
+    window.open('https://wa.me/'+WHATSAPP_NUMBER, '_blank');
     toast('PDF downloaded — please attach it manually in the WhatsApp chat that just opened.');
     finishSend();
   }
