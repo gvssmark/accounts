@@ -237,10 +237,10 @@
 // ==========================================================================
 // Configure this
 // ==========================================================================
-const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbzhQw91vz3BoDJKuMCchKsxbbNTMAZAE01VZ6t_Jbg7_kagi2rVCGyj6PxVi3oRX2Ik/exec';
+const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbwVYZP5RV1wRb_Gi-Q9dd0T0ZjlPeqrBjVdXJsVbQhC6JGSe2xFZ2Nu1opBCVH5kOx1/exec';
 // ==========================================================================
 
-const state = { finYears: [], accounts: [], bsieCodes: [], lastBsie: null, lastLedger: null, lastAccountsReport: null };
+const state = { finYears: [], accounts: [], bsieCodes: [], lastBsie: null, lastLedger: null, lastLedgerAcno: null, lastAccountsReport: null };
 
 // ---------------------------------------------------------------------
 // Nav / routing
@@ -324,7 +324,11 @@ function toast(msg, isError) {
 }
 function fmt(n) {
   n = Number(n) || 0;
-  return n.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+function isoToDdMmYyyy_(iso) {
+  const parts = String(iso).split('-');
+  return parts.length === 3 ? (parts[2] + '/' + parts[1] + '/' + parts[0]) : iso;
 }
 function escapeHtml(s) {
   return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -407,7 +411,7 @@ function renderJournal() {
       '<h2>New Journal Entry</h2>' +
       '<div class="row">' +
         '<div><label>Financial Year</label><input id="j_finYear" readonly value="' + data.finYear + '">' +
-          '<div class="hint">' + data.finYearStart + ' to ' + data.finYearEnd + '</div></div>' +
+          '<div class="hint">' + isoToDdMmYyyy_(data.finYearStart) + ' to ' + isoToDdMmYyyy_(data.finYearEnd) + '</div></div>' +
         '<div><label>Journal No.</label><input id="j_jrnlNo" readonly value="' + data.nextJrnlNo + '"></div>' +
       '</div>' +
       '<label>Date</label><input type="date" id="j_date" min="' + data.finYearStart + '" max="' + data.finYearEnd + '">' +
@@ -476,7 +480,7 @@ function renderBatch() {
       'couple of cheques that don\'t match 1:1. Only the totals need to balance.</p>' +
       '<div class="row">' +
         '<div><label>Financial Year</label><input id="bt_finYear" readonly value="' + batchState.finYear + '">' +
-          '<div class="hint">' + batchState.finYearStart + ' to ' + batchState.finYearEnd + '</div></div>' +
+          '<div class="hint">' + isoToDdMmYyyy_(batchState.finYearStart) + ' to ' + isoToDdMmYyyy_(batchState.finYearEnd) + '</div></div>' +
         '<div><label>Journal No. (voucher)</label><input id="bt_jrnlNo" readonly value="' + batchState.jrnlNo + '"></div>' +
         '<div><label>Date (applies to whole batch)</label><input type="date" id="bt_date" min="' + batchState.finYearStart + '" max="' + batchState.finYearEnd + '"></div>' +
       '</div>' +
@@ -769,7 +773,24 @@ function loadLedger() {
   const fy = document.getElementById('l_fy').value;
   const acc = document.getElementById('l_acc').value;
   document.getElementById('printHeaderSub').innerText = fy + ' LEDGER';
+  state.lastLedgerAcno = acc;
   apiGet('ledger', { finYear: fy, acno: acc }).then(d => { state.lastLedger = d; renderLedgerData(d); }).catch(err => showError('ledgerReportArea', err));
+}
+function batchSummaryTable_(batchLines) {
+  const rows = batchLines.map(l =>
+    '<tr>' +
+    '<td data-label="Date">' + l.date + '</td>' +
+    '<td data-label="Jrnl No">' + l.jrnlNo + '</td>' +
+    '<td data-label="Particulars">' + escapeHtml(l.particulars) + '</td>' +
+    '<td data-label="Dr/Cr">' + l.drCr + '</td>' +
+    '<td data-label="Amount">' + fmt(l.amount) + '</td>' +
+    '</tr>'
+  ).join('');
+  return '<div class="card" style="margin-top:20px;">' +
+    '<div class="report-subheading">BATCH TRANSACTIONS SUMMARY</div>' +
+    '<div class="table-wrap"><table class="report stack ledger-table"><thead><tr>' +
+    '<th>Date</th><th>Jrnl No</th><th>Particulars</th><th>Dr/Cr</th><th>Amount</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table></div></div>';
 }
 function renderLedgerData(d) {
   const closingYear = '20' + d.finYear.split('-')[1];
@@ -779,8 +800,11 @@ function renderLedgerData(d) {
     '<div class="org-heading-bar">Indian Bank Retirees\' Association</div>' +
     '<div class="report-subheading">LEDGER AS ON 30/06/' + closingYear + '</div>';
 
+  const showBatchSummary = state.lastLedgerAcno === 'ALL' && d.batchLines && d.batchLines.length > 0;
+
   if (!d.accounts.length) {
-    document.getElementById('ledgerReportArea').innerHTML = '<div class="card">' + heading + '<p>No entries for this selection.</p></div>';
+    document.getElementById('ledgerReportArea').innerHTML = '<div class="card">' + heading + '<p>No entries for this selection.</p></div>' +
+      (showBatchSummary ? batchSummaryTable_(d.batchLines) : '');
     return;
   }
   const body = d.accounts.map(acc => {
@@ -799,7 +823,8 @@ function renderLedgerData(d) {
       '<div class="table-wrap"><table class="report stack ledger-table"><thead><tr><th>Date</th><th>Jrnl No</th><th>Particulars</th>' +
       '<th>Debit</th><th>Credit</th><th>Balance</th></tr></thead><tbody>' + rows + '</tbody></table></div></div>';
   }).join('');
-  document.getElementById('ledgerReportArea').innerHTML = '<div class="card">' + heading + body + signatoriesBlock_() + '</div>';
+  document.getElementById('ledgerReportArea').innerHTML = '<div class="card">' + heading + body + signatoriesBlock_() + '</div>' +
+    (showBatchSummary ? batchSummaryTable_(d.batchLines) : '');
 }
 
 // ---------------------------------------------------------------------
@@ -1113,6 +1138,31 @@ function buildLedgerPdf_(d) {
 
   if (y > pageHeight - 35) { doc.addPage(); y = 20; }
   pdfSignatories_(doc, y, marginX, usableWidth);
+
+  if (d.batchLines && d.batchLines.length) {
+    doc.addPage();
+    let by = 14;
+    doc.setFont(undefined, 'bold'); doc.setFontSize(12); doc.setTextColor(20, 20, 20);
+    doc.text('BATCH TRANSACTIONS SUMMARY', pageWidth / 2, by, { align: 'center' });
+    by += 7;
+
+    const batchBody = d.batchLines.map(l => [l.date, String(l.jrnlNo), l.particulars, l.drCr, fmt(l.amount)]);
+    doc.autoTable({
+      startY: by,
+      margin: { left: marginX, right: marginX, top: 12 },
+      head: [['Date', 'Jrnl No', 'Particulars', 'Dr/Cr', 'Amount']],
+      body: batchBody,
+      styles: { fontSize: 7.6, cellPadding: 1.3, overflow: 'linebreak', lineColor: [230, 230, 230], lineWidth: 0.1 },
+      headStyles: { fillColor: PDF_HEAD_BG, textColor: PDF_HEAD_TEXT, fontStyle: 'bold', fontSize: 7 },
+      columnStyles: {
+        0: { cellWidth: 22 }, 1: { cellWidth: 18 }, 2: { cellWidth: 'auto' },
+        3: { cellWidth: 16 }, 4: { cellWidth: 26, halign: 'right' }
+      },
+      theme: 'plain',
+      didDrawPage: runningHeader
+    });
+  }
+
   return doc.output('blob');
 }
 
@@ -1166,7 +1216,7 @@ function getPdfBlob_(view) {
     return Promise.resolve(buildAccountsReportPdf_(state.lastAccountsReport));
   }
   if (!state.lastLedger) return Promise.reject(new Error('Report not loaded yet'));
-  return Promise.resolve(buildLedgerPdf_(state.lastLedger));
+  return Promise.resolve(buildLedgerPdf_(state.lastLedgerAcno === 'ALL' ? state.lastLedger : Object.assign({}, state.lastLedger, { batchLines: [] })));
 }
 
 function savePdf(view, kind) {

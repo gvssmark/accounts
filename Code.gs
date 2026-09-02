@@ -165,6 +165,11 @@ function fmtDate_(d) {
   return Utilities.formatDate(d, Session.getScriptTimeZone(), 'yyyy-MM-dd');
 }
 
+/** Display-only date format (dd/MM/yyyy) — used in report output, never for ISO bounds/validation. */
+function fmtDateDisplay_(d) {
+  return Utilities.formatDate(d, Session.getScriptTimeZone(), 'dd/MM/yyyy');
+}
+
 /** Builds one Journal row (in sheet-header order) for a single line. */
 function buildJournalRow_(header, date, jrnlNo, account, drCr, details, amount, finYear) {
   return header.map(h => {
@@ -556,7 +561,7 @@ function getLedgerData(finYear, acnoOrAll) {
       }
 
       entries.push({
-        date: fmtDate_(new Date(r.date)),
+        date: fmtDateDisplay_(new Date(r.date)),
         jrnlNo: r.jrnlNo,
         particulars: particulars,
         details: r.details,
@@ -574,7 +579,23 @@ function getLedgerData(finYear, acnoOrAll) {
     };
   }).filter(a => acnoOrAll !== 'ALL' || a.entries.length > 0);
 
-  return { finYear: finYear, accounts: result };
+  // Flat summary of every line belonging to a genuine batch voucher (3+ lines),
+  // across all accounts — meant for a "Batch Transactions" summary page at the
+  // end of the full Ledger report.
+  const batchLines = [];
+  rows.forEach(r => {
+    const siblings = byVoucher[String(r.jrnlNo)] || [r];
+    if (siblings.length <= 2) return;
+    batchLines.push({
+      date: fmtDateDisplay_(new Date(r.date)),
+      jrnlNo: r.jrnlNo,
+      particulars: r.account + (r.details ? (' — ' + r.details) : ''),
+      drCr: r.drCr,
+      amount: r.amount
+    });
+  });
+
+  return { finYear: finYear, accounts: result, batchLines: batchLines };
 }
 
 /**

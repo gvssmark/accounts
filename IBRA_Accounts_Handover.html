@@ -122,16 +122,34 @@
   </div>
 
   <h2 id="sheet">3. The Google Sheet</h2>
-  <h3>Journal — one row per transaction</h3>
+  <h3>Journal — line-item schema (one row per Dr or Cr line)</h3>
+  <div class="callout">
+    <strong>This schema changed after the app's first version</strong>
+    The original design was one row per transaction, with separate
+    <code>drAccount</code>/<code>crAccount</code> columns — that only supports a simple
+    1-debit/1-credit transaction. To support batch/compound transactions (e.g. several expense
+    claims paid out via a couple of cheques that don't match 1:1), the schema was changed to a
+    <strong>line-item model</strong>: every row is a single line (one account, one amount, tagged
+    Dr or Cr), and a "voucher" is a group of rows sharing the same <code>jrnlNo</code>. See
+    Section 4 for how this works and how existing data was migrated.
+  </div>
   <table>
     <tr><th>Column</th><th>Meaning</th></tr>
-    <tr><td><code>date</code></td><td>Transaction date</td></tr>
-    <tr><td><code>jrnlNo</code></td><td>Journal number — resets to 1 at the start of each financial year (see Section 4). Duplicates within a year are tolerated; corrected manually if needed.</td></tr>
-    <tr><td><code>drAccount</code> / <code>crAccount</code></td><td>Full account name (e.g. <code>1004-BANK ACCOUNT NO 465693063</code>), must match an entry in Accounts exactly</td></tr>
-    <tr><td><code>details</code></td><td>Free-text narration</td></tr>
-    <tr><td><code>amount</code></td><td>Transaction amount</td></tr>
+    <tr><td><code>date</code></td><td>Transaction date — shared by every line in a voucher</td></tr>
+    <tr><td><code>jrnlNo</code></td><td>The <strong>voucher number</strong>. Resets to 1 at the start of each financial year. Multiple rows sharing a jrnlNo form one voucher. Duplicates within a year are tolerated; corrected manually if needed.</td></tr>
+    <tr><td><code>account</code></td><td>Full account name (e.g. <code>1004-BANK ACCOUNT NO 465693063</code>), must match an entry in Accounts exactly</td></tr>
+    <tr><td><code>drCr</code></td><td>Exactly <code>Dr</code> or <code>Cr</code> — which side of this line's account this amount hits</td></tr>
+    <tr><td><code>details</code></td><td>Free-text narration for this line</td></tr>
+    <tr><td><code>amount</code></td><td>This line's amount</td></tr>
     <tr><td><code>finYear</code></td><td>e.g. <code>2025-26</code>. This is what all reporting filters on — the Journal is one continuous sheet across all years, not one file per year.</td></tr>
   </table>
+  <p>
+    A <strong>simple transaction</strong> is a 2-line voucher (1 Dr line + 1 Cr line, same amount)
+    — this is what the "Journal" menu produces. A <strong>batch/compound transaction</strong> is a
+    voucher with more lines, where only the <em>totals</em> must balance
+    (sum of Dr lines = sum of Cr lines for that jrnlNo) — not each line paired 1:1 against a
+    specific contra account. This is what the "Batch Transactions" menu produces.
+  </p>
 
   <h3>Accounts — the chart of accounts</h3>
   <table>
@@ -164,6 +182,27 @@
   </div>
 
   <h2 id="backend">4. Backend — Code.gs</h2>
+
+  <h3>Migrating from the old schema</h3>
+  <p>
+    <code>Code.gs</code> includes a one-time function, <code>migrateJournalToLineItems()</code>,
+    meant to be run manually from the Apps Script editor (not exposed via the Web App). It reads
+    the old-format Journal, writes the converted line-item rows into a new sheet called
+    <code>Journal_NEW</code> — leaving the original untouched — and the administrator then renames
+    the sheets to swap them in once satisfied. Full step-by-step is in <code>README.md</code>
+    Section 4.
+  </p>
+
+  <h3>Batch Transactions (multi-line vouchers)</h3>
+  <p>
+    <code>submitBatchJournal(entry)</code> takes <code>{date, finYear, lines: [{account, drCr,
+    details, amount}, ...]}</code>, validates at least one Dr line and one Cr line, validates
+    every account exists, validates the Dr total equals the Cr total, then writes all lines as one
+    atomic batch (a single <code>setValues()</code> call) sharing one new <code>jrnlNo</code>. The
+    simple <code>submitJournalEntry(entry)</code> (used by the "Journal" menu) is really just a
+    2-line special case of the same underlying model, written directly rather than routed through
+    the batch function.
+  </p>
   <p>
     A single Apps Script file deployed as a Web App. It has no database of its own — every call reads
     the Sheet fresh, computes what's needed, and (for writes) appends rows. Key design points:
@@ -192,11 +231,14 @@
   <p>
     Two-step: <code>previewCloseFinancialYear(finYear)</code> (read-only — computes what
     <em>would</em> be posted) and <code>closeFinancialYear(finYear, passcode)</code> (writes it). It
-    carries forward every non-zero Asset/Liability balance as an opening-balance Journal entry against
-    whichever account is mapped to BSIE code <code>2-01</code>, dated 1 July of the next FY. Payment/
-    Receipt (nominal) accounts are <em>not</em> carried forward — they start the new year at zero simply
-    because the Journal filter excludes prior years. It refuses to run if the next FY already has any
-    entries, to prevent duplicate opening balances.
+    posts <strong>one voucher</strong> (one shared jrnlNo): every non-zero Asset balance becomes a Dr
+    line, every non-zero Liability balance (other than the B/f account itself) becomes a Cr line,
+    and the account mapped to BSIE code <code>2-01</code> takes whichever side balances the voucher
+    — dated 1 July of the next FY. Payment/Receipt (nominal) accounts are <em>not</em> carried
+    forward — they start the new year at zero simply because the Journal filter excludes prior
+    years. It refuses to run if the next FY already has any entries, to prevent duplicate opening
+    balances. Because this voucher naturally has many lines, it reads as "Batch / Sundries" in the
+    Ledger, same as any other batch entry.
   </p>
   <h3>Admin passcode</h3>
   <p>
@@ -339,6 +381,12 @@
     <li>The BSIEcodes sheet's <code>2-05</code>/<code>1-07</code>/<code>3-10</code>/<code>4-06</code> codes
       are structurally required for the balance-check plug logic (Section 3) — removing them will break
       report balancing, not just cosmetics.</li>
+    <li>Dates display as dd/mm/yyyy and numbers use Indian lakh/crore grouping (<code>'en-IN'</code>
+      locale) throughout reports — this is deliberate, not a bug, and hardcoded rather than a
+      user-configurable setting.</li>
+    <li>The Ledger's "Batch Transactions Summary" page only appears when viewing All Accounts, and
+      only in the printed/PDF output as a genuinely separate page — it's a normal (non-paginated)
+      section when viewed on screen.</li>
   </ul>
 
   <h2 id="files">11. File manifest</h2>
@@ -349,7 +397,8 @@
     <tr><td><code>manifest.json</code></td><td>PWA manifest (name, icon, install behavior)</td></tr>
     <tr><td><code>sw.js</code></td><td>Service worker — app-shell caching for installability</td></tr>
     <tr><td><code>icon.svg</code></td><td>App icon</td></tr>
-    <tr><td><code>README.md</code></td><td>Step-by-step setup/deployment instructions</td></tr>
+    <tr><td><code>README.md</code></td><td>Step-by-step setup/deployment instructions (source of truth, GitHub-friendly)</td></tr>
+    <tr><td><code>README.html</code></td><td>The same setup instructions, rendered as a styled standalone page for easier reading</td></tr>
   </table>
 
   <h2 id="continuing">12. Continuing development with Claude</h2>

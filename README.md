@@ -81,7 +81,7 @@ Only needed once, if your Journal sheet still has `drAccount`/`crAccount` column
 | Batch Transactions | Multi-line voucher — add several Dr and/or Cr lines, post once totals balance |
 | Account Addition | Add a new Account by picking a BSIE mapping (Type + acno prefix auto-derived) |
 | BSIE Reports | Balance Sheet + Income & Expenditure for any FY — Save PDF or Share via WhatsApp |
-| Ledger Reports | Per-account transaction history + running balance for any FY — Save PDF or Share via WhatsApp |
+| Ledger Reports | Per-account transaction history + running balance for any FY, plus a Batch Transactions Summary page when viewing All Accounts — Save PDF or Share via WhatsApp |
 | Accounts Report | AC / BSIE / Name / Dr count / Total Debits / Cr count / Total Credits / Balance, per account |
 | Financial Year Closing | Passcode-protected. Preview then approve — posts one opening-balance voucher into the next FY |
 
@@ -112,6 +112,16 @@ Only needed once, if your Journal sheet still has `drAccount`/`crAccount` column
 - **Journal numbers may duplicate** if two people submit at nearly the same
   moment — the app doesn't block this; fix duplicates directly in the Sheet
   if it happens.
+- **Dates display as dd/mm/yyyy** in reports (Ledger, PDFs). The underlying
+  data and date-picker inputs still use ISO format internally — only the
+  printed/displayed text is dd/mm/yyyy.
+- **Numbers display in Indian grouping** (e.g. `12,34,567.00`, lakhs/crores),
+  forced via `'en-IN'` locale regardless of the viewer's browser/device locale.
+- **Batch Transactions Summary**: when viewing the Ledger with "All Accounts"
+  selected, a flat list of every line belonging to a genuine batch voucher
+  (3+ lines) appears after the per-account sections — in the PDF this is a
+  genuinely separate page (`doc.addPage()`), not just a visual break. It does
+  not appear when viewing a single account's ledger.
 - **PDF reports** are drawn as real vector tables via `jsPDF` + `jspdf-autotable`
   (not a screenshot of the page) — this avoids clipping/overflow issues and
   produces selectable text. "Share via WhatsApp" only appears when the
