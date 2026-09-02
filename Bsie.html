@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>Balance Sheet & Income/Expenditure</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 14px; max-width: 900px; margin: 30px auto; padding: 0 16px; }
+  h2 { margin-bottom: 4px; }
+  h3 { margin: 26px 0 8px; }
+  .controls { display: flex; gap: 12px; align-items: flex-end; margin-bottom: 12px; }
+  .controls > div { width: 220px; }
+  label { display: block; font-weight: bold; margin-bottom: 4px; font-size: 12px; color: #444; }
+  select { width: 100%; padding: 7px; font-size: 14px; border: 1px solid #ccc; border-radius: 4px; }
+  .badge {
+    display: inline-block; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: bold; margin-left: 10px;
+  }
+  .badge.ok { background: #e6f4ea; color: #0a7a2f; }
+  .badge.bad { background: #fce8e6; color: #c00; }
+  .cols { display: flex; gap: 24px; }
+  .col { flex: 1; }
+  table { width: 100%; border-collapse: collapse; margin-bottom: 4px; }
+  th, td { padding: 5px 8px; font-size: 13px; border-bottom: 1px solid #f0f0f0; text-align: right; }
+  th:nth-child(1), td:nth-child(1) { text-align: left; }
+  th:nth-child(2), td:nth-child(2) { text-align: left; }
+  .group-head td { font-weight: bold; background: #fafafa; }
+  .subtotal td { font-weight: bold; border-top: 1px solid #ccc; }
+  .grand-total td { font-weight: bold; font-size: 14px; border-top: 2px solid #333; background: #f5f5f5; }
+  .plug td { font-style: italic; color: #555; }
+  #error { color: #c00; margin-top: 10px; white-space: pre-wrap; }
+  #loading { color: #666; }
+</style>
+</head>
+<body>
+
+<h2>Balance Sheet &amp; Income / Expenditure</h2>
+
+<div class="controls">
+  <div>
+    <label>Financial Year</label>
+    <select id="finYear" onchange="load()"><option value="">Loading…</option></select>
+  </div>
+</div>
+
+<div id="loading">Loading…</div>
+<div id="results"></div>
+<div id="error"></div>
+
+<script>
+  // ---- Configure this ----
+  const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyR1RBasM75-8QsHp5DJ-kApzpo4-LueQmYK5HbtShnOtrDBpSMTbc4MrUMbQngm-D70w/exec';
+  // -------------------------
+
+  function fmt(n) {
+    return Number(n).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
+  function escapeHtml(s) {
+    return String(s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function init() {
+    fetch(WEB_APP_URL + '?action=finYears')
+      .then(r => r.json())
+      .then(res => {
+        if (!res.ok) throw new Error(res.error);
+        const sel = document.getElementById('finYear');
+        sel.innerHTML = '';
+        res.data.finYears.forEach(fy => {
+          sel.innerHTML += '<option value="' + fy + '">' + fy + '</option>';
+        });
+        sel.value = res.data.finYears[res.data.finYears.length - 1] || '';
+        load();
+      })
+      .catch(showError);
+  }
+
+  function load() {
+    const finYear = document.getElementById('finYear').value;
+    if (!finYear) return;
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('error').innerText = '';
+
+    fetch(WEB_APP_URL + '?action=bsie&finYear=' + encodeURIComponent(finYear))
+      .then(r => r.json())
+      .then(res => {
+        if (!res.ok) throw new Error(res.error);
+        render(res.data);
+      })
+      .catch(showError)
+      .finally(() => document.getElementById('loading').style.display = 'none');
+  }
+
+  function groupRows(groups) {
+    return groups.map(g => {
+      const lines = g.lines.map(l =>
+        '<tr><td colspan="2">&nbsp;&nbsp;' + escapeHtml(l.acno + '-' + l.acname) + '</td><td>' + fmt(l.balance) + '</td></tr>'
+      ).join('');
+      const subtotalRow = g.lines.length > 1
+        ? '<tr class="subtotal"><td colspan="2">' + escapeHtml(g.bsie) + ' subtotal</td><td>' + fmt(g.subtotal) + '</td></tr>'
+        : '';
+      return '<tr class="group-head"><td colspan="2">' + escapeHtml(g.bsie) + '</td><td></td></tr>' + lines + subtotalRow;
+    }).join('');
+  }
+
+  function render(d) {
+    const badge = d.balanced
+      ? '<span class="badge ok">Assets = Liabilities ✓</span>'
+      : '<span class="badge bad">Out of balance by ' + fmt(Math.abs(d.totalAssets - d.totalLiabilities)) + '</span>';
+
+    const bsHtml =
+      '<h3>Balance Sheet as on ' + escapeHtml(d.finYear) + badge + '</h3>' +
+      '<div class="cols">' +
+        '<div class="col"><table><thead><tr><th colspan="2">Liabilities</th><th>Amount</th></tr></thead><tbody>' +
+          groupRows(d.liabilities) +
+          '<tr class="plug"><td colspan="2">Excess of Income over Expenditure carried over</td><td>' + fmt(d.excess) + '</td></tr>' +
+          '<tr class="grand-total"><td colspan="2">Total</td><td>' + fmt(d.totalLiabilities) + '</td></tr>' +
+        '</tbody></table></div>' +
+        '<div class="col"><table><thead><tr><th colspan="2">Assets</th><th>Amount</th></tr></thead><tbody>' +
+          groupRows(d.assets) +
+          '<tr class="grand-total"><td colspan="2">Total</td><td>' + fmt(d.totalAssets) + '</td></tr>' +
+        '</tbody></table></div>' +
+      '</div>';
+
+    const ieHtml =
+      '<h3>Income &amp; Expenditure for ' + escapeHtml(d.finYear) + '</h3>' +
+      '<div class="cols">' +
+        '<div class="col"><table><thead><tr><th colspan="2">Expenditure</th><th>Amount</th></tr></thead><tbody>' +
+          groupRows(d.expenditure) +
+          (d.excess >= 0 ? '<tr class="plug"><td colspan="2">Excess of Income over Expenditure</td><td>' + fmt(d.excess) + '</td></tr>' : '') +
+          '<tr class="grand-total"><td colspan="2">Total</td><td>' + fmt(d.totalExpenditure + Math.max(d.excess, 0)) + '</td></tr>' +
+        '</tbody></table></div>' +
+        '<div class="col"><table><thead><tr><th colspan="2">Income</th><th>Amount</th></tr></thead><tbody>' +
+          groupRows(d.income) +
+          (d.excess < 0 ? '<tr class="plug"><td colspan="2">Excess of Expenditure over Income</td><td>' + fmt(-d.excess) + '</td></tr>' : '') +
+          '<tr class="grand-total"><td colspan="2">Total</td><td>' + fmt(d.totalIncome + Math.max(-d.excess, 0)) + '</td></tr>' +
+        '</tbody></table></div>' +
+      '</div>';
+
+    document.getElementById('results').innerHTML = bsHtml + ieHtml;
+  }
+
+  function showError(err) {
+    document.getElementById('error').innerText = err.message || err;
+  }
+
+  init();
+</script>
+</body>
+</html>

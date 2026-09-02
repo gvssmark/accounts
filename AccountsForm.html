@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>New Account</title>
+<style>
+  body { font-family: Arial, sans-serif; font-size: 14px; max-width: 480px; margin: 30px auto; padding: 0 16px; }
+  h2 { margin-bottom: 4px; }
+  label { display: block; margin-top: 14px; font-weight: bold; }
+  input, select {
+    width: 100%; padding: 7px; margin-top: 4px; box-sizing: border-box;
+    font-size: 14px; border: 1px solid #ccc; border-radius: 4px;
+  }
+  .row { display: flex; gap: 12px; }
+  .row > div { flex: 1; }
+  .hint { color: #666; font-size: 11px; margin-top: 3px; }
+  .preview { margin-top: 16px; padding: 9px; background: #f3f3f3; border-radius: 4px; }
+  button {
+    margin-top: 20px; padding: 9px 18px; font-size: 14px; border: none;
+    border-radius: 4px; background: #1a73e8; color: white; cursor: pointer;
+  }
+  button:disabled { background: #999; cursor: default; }
+  #error { color: #c00; margin-top: 10px; white-space: pre-wrap; }
+  #success { color: #0a7a2f; margin-top: 10px; }
+  #loading { color: #666; margin-top: 10px; }
+</style>
+</head>
+<body>
+
+<h2>New Account</h2>
+<div id="loading">Loading…</div>
+
+<form id="form" style="display:none">
+  <label>Account Type</label>
+  <select id="type" onchange="onTypeChange()"><option value="">Select…</option></select>
+
+  <div class="row">
+    <div>
+      <label>Account No.</label>
+      <input id="acno" maxlength="4" oninput="updatePreview()">
+      <div class="hint">4 digits — auto-suggested, editable</div>
+    </div>
+    <div>
+      <label>Map to BSIE</label>
+      <input id="bsie" placeholder="e.g. 1-09">
+    </div>
+  </div>
+
+  <label>Account Name</label>
+  <input id="acname" oninput="updatePreview()">
+
+  <div class="preview" id="preview">Full account name will appear here</div>
+
+  <button type="button" id="submitBtn" onclick="submitEntry()">Add Account</button>
+</form>
+
+<div id="error"></div>
+<div id="success"></div>
+
+<script>
+  // ---- Configure this ----
+  const WEB_APP_URL = 'https://script.google.com/macros/s/AKfycbyR1RBasM75-8QsHp5DJ-kApzpo4-LueQmYK5HbtShnOtrDBpSMTbc4MrUMbQngm-D70w/exec';
+  // -------------------------
+
+  function loadForm() {
+    fetch(WEB_APP_URL + '?action=accountsForm')
+      .then(r => r.json())
+      .then(res => {
+        if (!res.ok) throw new Error(res.error);
+        init(res.data);
+      })
+      .catch(showError);
+  }
+
+  function init(data) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('form').style.display = 'block';
+
+    const typeSel = document.getElementById('type');
+    typeSel.innerHTML = '<option value="">Select…</option>';
+    data.types.forEach(t => {
+      typeSel.innerHTML += '<option value="' + t + '">' + t + '</option>';
+    });
+  }
+
+  function onTypeChange() {
+    const type = document.getElementById('type').value;
+    if (!type) return;
+    fetch(WEB_APP_URL + '?action=nextAcno&type=' + encodeURIComponent(type))
+      .then(r => r.json())
+      .then(res => {
+        if (!res.ok) throw new Error(res.error);
+        document.getElementById('acno').value = res.data.acno;
+        updatePreview();
+      })
+      .catch(showError);
+  }
+
+  function updatePreview() {
+    const acno = document.getElementById('acno').value.trim();
+    const name = document.getElementById('acname').value.trim();
+    document.getElementById('preview').innerText =
+      (acno && name) ? (acno + '-' + name) : 'Full account name will appear here';
+  }
+
+  function showError(err) {
+    document.getElementById('error').innerText = err.message || err;
+    document.getElementById('submitBtn').disabled = false;
+  }
+
+  function submitEntry() {
+    document.getElementById('error').innerText = '';
+    document.getElementById('success').innerText = '';
+    document.getElementById('submitBtn').disabled = true;
+
+    const entry = {
+      acno: document.getElementById('acno').value.trim(),
+      bsie: document.getElementById('bsie').value.trim(),
+      type: document.getElementById('type').value,
+      acname: document.getElementById('acname').value.trim()
+    };
+
+    fetch(WEB_APP_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'account', entry: entry })
+    })
+      .then(r => r.json())
+      .then(res => {
+        if (!res.ok) throw new Error(res.error);
+        document.getElementById('success').innerText = 'Saved: ' + res.data.fullacname;
+        document.getElementById('acname').value = '';
+        document.getElementById('bsie').value = '';
+        document.getElementById('preview').innerText = 'Full account name will appear here';
+        document.getElementById('submitBtn').disabled = false;
+      })
+      .catch(err => {
+        showError(err);
+        document.getElementById('submitBtn').disabled = false;
+      });
+  }
+
+  loadForm();
+</script>
+</body>
+</html>
